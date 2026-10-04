@@ -5,6 +5,7 @@ Engines (Reihenfolge laut Spezifikation):
   edge   – edge-tts, de-DE-KatjaNeural, rate -20 %, pitch -5 Hz (Standard)
   piper  – Piper offline, z. B. de_DE-thorsten-high.onnx (--model)
   azure  – Azure Speech REST (AZURE_SPEECH_KEY, AZURE_SPEECH_REGION)
+  google – Google-Übersetzer-Stimme (inoffiziell, ohne Key, kein Tempo-Regler)
 
 Braucht ffmpeg im PATH. Beispiele:
   python build_clips.py
@@ -114,6 +115,28 @@ def piper_render(words, model, length_scale, speaker=None):
     return out, missing
 
 
+def google_render(words):
+    import time
+    import urllib.parse
+
+    out = {}
+    for w in words:
+        url = ("https://translate.googleapis.com/translate_tts?ie=UTF-8&client=gtx"
+               "&tl=de&q=" + urllib.parse.quote(w))
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        for attempt in range(4):
+            try:
+                with urllib.request.urlopen(req, timeout=30) as r:
+                    out[w] = r.read()
+                break
+            except Exception:
+                if attempt == 3:
+                    raise
+                time.sleep(2 ** (attempt + 1))
+        time.sleep(0.2)  # inoffizieller Dienst: nicht drängeln
+    return out
+
+
 def azure_render(words, voice, rate, pitch):
     key = os.environ["AZURE_SPEECH_KEY"]
     region = os.environ["AZURE_SPEECH_REGION"]
@@ -183,7 +206,7 @@ def process(x):
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--engine", choices=["edge", "piper", "azure"], default="edge")
+    ap.add_argument("--engine", choices=["edge", "piper", "azure", "google"], default="edge")
     ap.add_argument("--voice", default="de-DE-KatjaNeural")
     ap.add_argument("--rate", default="-20%", help="edge/azure")
     ap.add_argument("--pitch", default="-5Hz", help="edge/azure")
@@ -209,6 +232,8 @@ def main():
         if not a.model:
             ap.error("--model fehlt")
         raw, missing = piper_render(words, a.model, a.length_scale)
+    elif a.engine == "google":
+        raw = google_render(words)
     else:
         raw = azure_render(words, a.voice, a.rate, a.pitch)
 
