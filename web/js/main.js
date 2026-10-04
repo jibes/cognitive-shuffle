@@ -92,6 +92,9 @@ function setLang(code, remember) {
   const t = TEXT[code];
   document.documentElement.lang = code;
   document.title = t.title;
+  // Installieren übernimmt Name und Sprache aus dem gerade verlinkten Manifest
+  $("manifest").setAttribute("href", `manifest.${code}.webmanifest`);
+  $("app-title").setAttribute("content", t.appName);
   document.querySelectorAll("[data-t]").forEach(el => { el.textContent = t[el.dataset.t]; });
   ui.lang.querySelectorAll("button").forEach(b =>
     b.setAttribute("aria-checked", String(b.dataset.lang === code)));

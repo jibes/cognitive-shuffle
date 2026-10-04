@@ -5,6 +5,7 @@ export const TEXT = {
   de: {
     name: "Deutsch",
     title: "Einschlafwörter",
+    appName: "Einschlafen",
     artist: "Wörter zum Einschlafen",
     hint: "Dauer antippen, Handy weglegen und den Wörtern zuhören, bis sie von selbst verklingen.",
     noise: "Rauschen",
@@ -21,6 +22,7 @@ export const TEXT = {
   en: {
     name: "English",
     title: "Sleep Words",
+    appName: "Sleep Words",
     artist: "Words to fall asleep to",
     hint: "Tap a length, put the phone down and listen to the words until they fade away on their own.",
     noise: "Noise",

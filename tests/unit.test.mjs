@@ -113,3 +113,20 @@ test("sw.js: App-Hülle vollständig und vorhanden", async () => {
   const offline = await readFile(new URL("js/offline.js", web), "utf8");
   assert.equal(offline.match(/CACHE = "([^"]+)"/)[1], src.match(/CACHE = "([^"]+)"/)[1], "Cache-Name gleich");
 });
+
+test("Manifeste: je Sprache vorhanden, gleich aufgebaut, Icons existieren", async () => {
+  const { readFile, access } = await import("node:fs/promises");
+  const web = new URL("../web/", import.meta.url);
+  const load = async l => JSON.parse(await readFile(new URL(`manifest.${l}.webmanifest`, web), "utf8"));
+  const base = await load(LANGS[0]);
+  for (const l of LANGS) {
+    const m = await load(l);
+    assert.equal(m.lang, l);
+    assert.equal(m.short_name, TEXT[l].appName);
+    assert.deepEqual(Object.keys(m).sort(), Object.keys(base).sort());
+    assert.equal(m.display, "standalone");
+    for (const i of m.icons) await access(new URL(i.src, web));
+    for (const size of ["192x192", "512x512"]) assert.ok(m.icons.some(i => i.sizes === size), size);
+    assert.ok(m.icons.some(i => i.purpose === "maskable"));
+  }
+});

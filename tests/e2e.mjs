@@ -94,6 +94,24 @@ for (const [locale, lang, night] of [["de-DE", "de", "Gute Nacht"], ["en-GB", "e
   await p.context().close();
 }
 
+// Installierbar (Chromium-Prüfung); Manifest folgt der Sprache
+for (const [locale, name] of [["de-DE", "Einschlafen"], ["en-GB", "Sleep Words"]]) {
+  const p = await page(locale, { blockFonts: false });
+  const cdp = await p.context().newCDPSession(p);
+  // Leere Fehlerliste allein heißt nichts: erst gilt, wenn das Manifest auch geladen ist.
+  let errors = [], url = "";
+  for (let t = Date.now(); Date.now() - t < 30000; await p.waitForTimeout(500)) {
+    ({ url } = await cdp.send("Page.getAppManifest"));
+    ({ installabilityErrors: errors } = await cdp.send("Page.getInstallabilityErrors"));
+    if (url && !errors.length) break;
+  }
+  const ok = !!url && !errors.length;
+  check(ok, `${locale}: installierbar${ok ? "" : " – " + (url ? errors.map(e => e.errorId).join(", ") : "kein Manifest")}`);
+  const manifest = url ? await (await p.request.get(url)).json() : {};
+  check(manifest.short_name === name, `${locale}: Manifest-Name „${manifest.short_name}“`);
+  await p.context().close();
+}
+
 // Offline: nach einem Online-Besuch läuft die App ohne Netz
 {
   const p = await page("de-DE", { blockFonts: false });
