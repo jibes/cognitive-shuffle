@@ -18,6 +18,8 @@ export const TEXT = {
     tap: "Tippen zum Abspielen",
     night: "Gute Nacht",
     fail: "Der Ton ließ sich nicht vorbereiten.",
+    infoOpen: "Info: was es ist und wie es geht",
+    infoClose: "Schließen",
   },
   en: {
     name: "English",
@@ -35,6 +37,8 @@ export const TEXT = {
     tap: "Tap to play",
     night: "Good night",
     fail: "The sound could not be prepared.",
+    infoOpen: "Info: what it is and how to use it",
+    infoClose: "Close",
   },
 };
 

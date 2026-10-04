@@ -37,12 +37,26 @@ body {
     max(16px, env(safe-area-inset-left));
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
+  justify-content: flex-start;  /* flex-end würde Überlauf oben unerreichbar machen */
   gap: 28px;
+  overflow-y: auto;
+}
+.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 0 -8px;
+}
+.intro { margin: 0 0 auto; padding-top: 6vh; }
+h1 {
+  margin: 0 0 14px;
+  font-weight: 300;
+  font-size: clamp(2.1rem, 9vw, 2.7rem);
+  line-height: 1.1;
+  color: var(--text);
 }
 .hint {
-  margin: 0 0 auto;
-  padding-top: 16vh;
+  margin: 0;
   font-size: 1.4rem;
   line-height: 1.45;
   color: var(--text);
@@ -83,9 +97,7 @@ button:active { background: var(--line); }
 }
 .lang {
   display: flex;
-  justify-content: flex-end;
   gap: 4px;
-  margin: 0 -8px 0 0;
 }
 .lang button {
   width: auto;
@@ -97,6 +109,7 @@ button:active { background: var(--line); }
 .lang button[aria-checked="true"] { color: var(--text); }
 .status {
   margin: 0;
+  flex-shrink: 0;
   min-height: 1.4em;
   text-align: center;
   font-size: 1.05rem;
@@ -125,3 +138,87 @@ button:active { background: var(--line); }
   opacity: 0;
 }
 #word.night { transition: opacity 2.5s ease-in-out; }
+
+/* Runde Symbolknöpfe (Info, Schließen) */
+.icon {
+  width: 44px;
+  min-height: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+}
+
+/* Info-Dialog: Vollbild-Blatt, auf breiten Schirmen mittig */
+#info {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+}
+#info[open] { position: fixed; inset: 0; z-index: 10; }
+#info::backdrop { background: rgba(5, 3, 2, .75); }
+.sheet {
+  box-sizing: border-box;
+  height: 100%;
+  max-width: 34rem;
+  margin: 0 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--bg);
+  border-left: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+  padding:
+    max(12px, env(safe-area-inset-top))
+    max(20px, env(safe-area-inset-right))
+    max(32px, env(safe-area-inset-bottom))
+    max(20px, env(safe-area-inset-left));
+  -webkit-user-select: text;
+  user-select: text;
+}
+.sheet .close {
+  position: sticky;
+  top: 0;
+  float: right;
+  margin: 0 -10px 0 8px;
+  background: var(--bg);
+}
+.sheet h2, .sheet h3 { font-weight: 300; color: var(--text); }
+.sheet h2 { font-size: 2rem; margin: 6px 0 14px; }
+.sheet h3 { font-size: 1.35rem; margin: 30px 0 8px; }
+.sheet p, .sheet li {
+  font-style: normal;
+  font-size: 1.1rem;
+  line-height: 1.6;
+  color: var(--text);
+  opacity: .85;
+}
+.sheet p { margin: 0 0 12px; }
+.sheet ol { margin: 0 0 12px; padding-left: 1.3em; }
+.sheet li { margin: 0 0 6px; }
+.sheet strong { font-weight: 300; font-style: italic; opacity: 1; }
+.sheet a { color: var(--text); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.sheet .refs { padding-left: 1.1em; }
+.sheet .refs li { font-size: .98rem; opacity: .7; }
+.sheet .done { margin-top: 28px; min-height: 56px; font-size: 1.25rem; }
+
+/* Kleine Bildschirme (z. B. iPhone SE): alles ohne Scrollen */
+@media (max-height: 680px) {
+  #start { gap: 16px; }
+  .intro { padding-top: 0; }
+  h1 { font-size: 2rem; margin-bottom: 8px; }
+  .hint { font-size: 1.15rem; line-height: 1.4; }
+  .col { gap: 10px; }
+  button { min-height: 54px; font-size: 1.3rem; }
+  .noise button { min-height: 46px; }
+  .label { margin-bottom: 6px; }
+}

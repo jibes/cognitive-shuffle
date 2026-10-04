@@ -96,6 +96,8 @@ function setLang(code, remember) {
   $("manifest").setAttribute("href", `manifest.${code}.webmanifest`);
   $("app-title").setAttribute("content", t.appName);
   document.querySelectorAll("[data-t]").forEach(el => { el.textContent = t[el.dataset.t]; });
+  document.querySelectorAll("[data-t-label]").forEach(el => { el.setAttribute("aria-label", t[el.dataset.tLabel]); });
+  document.querySelectorAll("[data-lang-block]").forEach(el => { el.hidden = el.dataset.langBlock !== code; });
   ui.lang.querySelectorAll("button").forEach(b =>
     b.setAttribute("aria-checked", String(b.dataset.lang === code)));
   ui.status.textContent = "";
@@ -159,6 +161,20 @@ $("player").addEventListener("ended", () => {
 });
 
 registerOffline();
+// ---------- Info ----------
+const info = $("info");
+function openInfo() {
+  if (info.showModal) info.showModal(); else info.setAttribute("open", "");
+  info.querySelector(".sheet").scrollTop = 0;
+}
+function closeInfo() {
+  if (info.close) info.close(); else info.removeAttribute("open");
+}
+$("info-open").addEventListener("click", openInfo);
+$("info-close").addEventListener("click", closeInfo);
+$("info-done").addEventListener("click", closeInfo);
+info.addEventListener("click", e => { if (e.target === info) closeInfo(); });  // Tipp neben das Blatt
+
 renderLangSwitch();
 renderNoise();
 setLang(pickLang(storage.get(KEYS.lang), navigator.languages || [navigator.language]), false);

@@ -130,3 +130,14 @@ test("Manifeste: je Sprache vorhanden, gleich aufgebaut, Icons existieren", asyn
     assert.ok(m.icons.some(i => i.purpose === "maskable"));
   }
 });
+
+test("Info-Dialog: ein Abschnitt je Sprache mit Quellen", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const html = await readFile(new URL("../web/index.html", import.meta.url), "utf8");
+  for (const l of LANGS) {
+    const m = html.match(new RegExp(`<article lang="${l}" data-lang-block="${l}">([\\s\\S]*?)</article>`));
+    assert.ok(m, `Info-Abschnitt ${l} fehlt`);
+    assert.equal((m[1].match(/<h3>/g) || []).length, 4, `${l}: vier Unterabschnitte`);
+    assert.equal((m[1].match(/href="https:\/\//g) || []).length, 3, `${l}: drei Quellen`);
+  }
+});

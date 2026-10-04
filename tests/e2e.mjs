@@ -82,6 +82,18 @@ for (const [locale, lang, night] of [["de-DE", "de", "Gute Nacht"], ["en-GB", "e
   await p.context().close();
 }
 
+// Titel und Info-Dialog je Sprache
+for (const [locale, title, heading] of [["de-DE", "Einschlafwörter", "So geht’s"], ["en-GB", "Sleep Words", "How to use"]]) {
+  const p = await page(locale);
+  check(await p.textContent("h1") === title, `${locale}: Titel „${title}“`);
+  await p.click("#info-open");
+  const shown = await p.evaluate(() => [...document.querySelectorAll("#info article")].filter(a => a.offsetParent).map(a => a.querySelector("h3").textContent));
+  check(await p.evaluate(() => document.getElementById("info").open) && shown.length === 1 && shown[0] === heading, `${locale}: Info öffnet in eigener Sprache`);
+  await p.keyboard.press("Escape");
+  check(!(await p.evaluate(() => document.getElementById("info").open)), `${locale}: Info schließt mit Esc`);
+  await p.context().close();
+}
+
 // Umschalter: Wahl wird gemerkt und übersteuert die Browsersprache
 {
   const p = await page("de-DE");
