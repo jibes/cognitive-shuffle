@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Rendert woerter.txt zu MP3-Clips und baut einschlafwoerter.html.
+"""Rendert woerter.txt zu MP3-Clips und baut index.html.
 
 Engines (Reihenfolge laut Spezifikation):
   edge   – edge-tts, de-DE-KatjaNeural, rate -20 %, pitch -5 Hz (Standard)
@@ -216,7 +216,7 @@ def main():
     ap.add_argument("--words", type=Path, default=ROOT / "woerter.txt")
     ap.add_argument("--only", help="kommagetrennt, nur diese Wörter (Test)")
     ap.add_argument("--template", type=Path, default=ROOT / "template.html")
-    ap.add_argument("--out", type=Path, default=ROOT / "einschlafwoerter.html")
+    ap.add_argument("--out", type=Path, default=ROOT / "index.html")
     ap.add_argument("--clips", type=Path, default=ROOT / "clips.json")
     a = ap.parse_args()
 
