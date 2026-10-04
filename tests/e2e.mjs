@@ -31,11 +31,12 @@ const browser = await chromium.launch({ proxy, args: proxy ? ["--ignore-certific
 let failed = 0;
 const check = (ok, msg) => { console.log(`${ok ? "ok  " : "FAIL"} ${msg}`); if (!ok) failed++; };
 
-async function page(locale) {
+// Routing schaltet in Chromium den Service Worker ab – für den Offline-Test daher ohne.
+async function page(locale, { blockFonts = true } = {}) {
   const ctx = await browser.newContext({ locale, viewport: { width: 360, height: 740 } });
   const p = await ctx.newPage();
   p.on("pageerror", e => check(false, `Seitenfehler: ${e.message}`));
-  await p.route(/fonts\.(googleapis|gstatic)\.com/, r => r.abort());
+  if (blockFonts) await p.route(/fonts\.(googleapis|gstatic)\.com/, r => r.abort());
   await p.goto(base);
   return p;
 }
@@ -90,6 +91,26 @@ for (const [locale, lang, night] of [["de-DE", "de", "Gute Nacht"], ["en-GB", "e
   check(await p.evaluate(() => document.documentElement.lang) === "en", "Umschalter: Wahl bleibt nach Neuladen");
   const r = await session(p, "off", 10);
   check(r.noiseDb < -100, "Umschalter: englische Sitzung ohne Rauschen");
+  await p.context().close();
+}
+
+// Offline: nach einem Online-Besuch läuft die App ohne Netz
+{
+  const p = await page("de-DE", { blockFonts: false });
+  // waitForFunction wertet ein Promise als „wahr“ – daher selbst abfragen.
+  const cached = () => p.evaluate(async () => {
+    const c = await caches.open("ew-v1");
+    return !!(navigator.serviceWorker.controller && await c.match("clips/de.json") && await c.match("./"));
+  });
+  for (let t = Date.now(); !(await cached()); ) {
+    if (Date.now() - t > 60000) throw new Error("Offline-Cache nicht befüllt");
+    await p.waitForTimeout(500);
+  }
+  await p.context().setOffline(true);
+  await p.reload();
+  check(await p.evaluate(() => document.documentElement.lang) === "de", "Offline: App lädt aus dem Cache");
+  const r = await session(p, "soft", 10);
+  check(!r.paused && Math.abs(r.duration - 632) < 1, "Offline: Sitzung spielt");
   await p.context().close();
 }
 

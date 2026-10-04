@@ -101,3 +101,15 @@ test("i18n: gespeicherte Wahl > Browser > Englisch; alle Texte vollständig", ()
   const keys = Object.keys(TEXT.de).sort();
   for (const l of LANGS) assert.deepEqual(Object.keys(TEXT[l]).sort(), keys, l);
 });
+
+test("sw.js: App-Hülle vollständig und vorhanden", async () => {
+  const { readFile, readdir, access } = await import("node:fs/promises");
+  const web = new URL("../web/", import.meta.url);
+  const src = await readFile(new URL("sw.js", web), "utf8");
+  const shell = JSON.parse(src.match(/const SHELL = (\[[\s\S]*?\]);/)[1].replace(/,\s*\]/, "]"));
+  for (const f of shell.filter(f => f !== "./")) await access(new URL(f, web));
+  const js = (await readdir(new URL("js/", web))).map(f => `js/${f}`);
+  for (const f of [...js, "css/app.css"]) assert.ok(shell.includes(f), `${f} fehlt in SHELL`);
+  const offline = await readFile(new URL("js/offline.js", web), "utf8");
+  assert.equal(offline.match(/CACHE = "([^"]+)"/)[1], src.match(/CACHE = "([^"]+)"/)[1], "Cache-Name gleich");
+});

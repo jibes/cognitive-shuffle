@@ -6,6 +6,7 @@ import { freshDeck, validDeck, draw } from "./deck.js";
 import { mixSession } from "./mix.js";
 import { loadBundle, outRate, pcm } from "./clips.js";
 import { createStage } from "./stage.js";
+import { registerOffline, keepOffline } from "./offline.js";
 
 const $ = id => document.getElementById(id);
 const ui = { start: $("start"), stage: $("stage"), status: $("status"), lang: $("lang") };
@@ -96,6 +97,7 @@ function setLang(code, remember) {
     b.setAttribute("aria-checked", String(b.dataset.lang === code)));
   ui.status.textContent = "";
   prewarm(code);
+  loadBundle(code).then(() => keepOffline(code), () => {});
 }
 
 function renderLangSwitch() {
@@ -153,6 +155,7 @@ $("player").addEventListener("ended", () => {
   stage.goodNight(TEXT[lang].night, () => { if (phase === "night") phase = "done"; });
 });
 
+registerOffline();
 renderLangSwitch();
 renderNoise();
 setLang(pickLang(storage.get(KEYS.lang), navigator.languages || [navigator.language]), false);

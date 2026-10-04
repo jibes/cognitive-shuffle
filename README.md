@@ -1,7 +1,7 @@
 # Einschlafwörter / Sleep Words
 
 Einschlafhilfe nach der Cognitive-Shuffle-Methode: neutrale Wörter in wachsenden Pausen, läuft bei gesperrtem Bildschirm weiter.
-**https://jibes.github.io/cognitive-shuffle/** öffnen (Brave: Hintergrundwiedergabe erlauben), Dauer antippen, sperren. Tippen = nächstes Wort, lange drücken = beenden. Sprache folgt dem Browser, umschaltbar oben rechts.
+**https://jibes.github.io/cognitive-shuffle/** öffnen (Brave: Hintergrundwiedergabe erlauben), Dauer antippen, sperren. Tippen = nächstes Wort, lange drücken = beenden. Sprache folgt dem Browser, umschaltbar oben rechts. Nach einem Online-Besuch läuft die App offline (Service Worker `web/sw.js`; Clips der zuletzt genutzten Sprachen).
 
 | Ordner | Inhalt |
 |---|---|
