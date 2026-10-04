@@ -11,6 +11,6 @@ Einschlafhilfe nach der Cognitive-Shuffle-Methode: neutrale Wörter in wachsende
 | `tests/` | `npm test` (Logik, Node), `npm run e2e` (Browser, Playwright) |
 
 - Lokal: `npm run serve` → http://localhost:8000
-- Clips bauen: `pip install -r tools/requirements.txt` + ffmpeg, dann `python tools/build_clips.py --lang de` (edge-tts Katja/Sonia; ohne Key: `--engine google`; offline: `--engine piper --model …onnx`). Eingecheckt sind Google-Stimmen (edge-tts war in der Build-Umgebung nicht erreichbar).
+- Clips bauen: `pip install -r tools/requirements.txt` + ffmpeg, dann `python tools/build_clips.py --lang de` (edge-tts Katja/Sonia; ohne Key: `--engine google`; offline: `--engine piper --model …onnx`; ElevenLabs: `--engine eleven --voice <voice_id>` mit `ELEVENLABS_API_KEY`, ~40 Wörter je Request, Schnitt an Zeitstempeln, Cache `tools/.cache/eleven/`, Proben per `--only … --mp3-dir DIR`). Eingecheckt sind Google-Stimmen (edge-tts war in der Build-Umgebung nicht erreichbar).
 - Neue Sprache: `words/<code>.txt`, Eintrag in `LANGS` (`tools/build_clips.py`) und `TEXT` (`web/js/i18n.js`), Clips bauen.
 - Deploy: Push auf `main` → GitHub Actions testet und veröffentlicht `web/` (Pages-Quelle: „GitHub Actions“).

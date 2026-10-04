@@ -6,23 +6,30 @@ Engines (Reihenfolge laut Spezifikation):
   piper  – Piper offline, z. B. de_DE-thorsten-high.onnx (--model)
   azure  – Azure Speech REST (AZURE_SPEECH_KEY, AZURE_SPEECH_REGION)
   google – Google-Übersetzer-Stimme (inoffiziell, ohne Key, kein Tempo-Regler)
+  eleven – ElevenLabs (ELEVENLABS_API_KEY): ~40 Wörter je Request als „A. B. C.“,
+           Schnitt an Zeichen-Zeitstempeln -> natürliche fallende Intonation.
+           Rohantworten in tools/.cache/eleven/ (nie doppelt zahlen).
 
 Braucht ffmpeg im PATH. Beispiele:
   python tools/build_clips.py --lang de
   python tools/build_clips.py --lang en --engine google
   python tools/build_clips.py --lang de --engine piper --model de_DE-thorsten-high.onnx
   python tools/build_clips.py --lang de --only Würfel,Löffel   # nur diese neu, Rest bleibt
+  python tools/build_clips.py --lang de --engine eleven --voice <voice_id> \
+      --only Würfel,Löffel --mp3-dir /tmp/probe   # Stimmprobe, Clips-Datei bleibt
 """
 
 import argparse
 import asyncio
 import base64
+import hashlib
 import json
 import os
 import statistics
 import subprocess
 import sys
 import unicodedata
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -31,6 +38,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parent.parent
 WORDS_DIR = ROOT / "words"
 CLIPS_DIR = ROOT / "web" / "clips"
+CACHE_DIR = ROOT / "tools" / ".cache" / "eleven"
 SR = 24000  # Arbeits- und Ausgaberate der Clips
 TRIM_DB = -45.0
 FADE_IN_S = 0.030
@@ -39,8 +47,8 @@ PEAK_DBFS = -3.0
 BITRATE = "48k"
 # Neue Sprache: Eintrag hier, words/<code>.txt und Texte in web/js/i18n.js
 LANGS = {
-    "de": {"voice": "de-DE-KatjaNeural", "tl": "de", "xml": "de-DE"},
-    "en": {"voice": "en-GB-SoniaNeural", "tl": "en-GB", "xml": "en-GB"},
+    "de": {"voice": "de-DE-KatjaNeural", "tl": "de", "xml": "de-DE", "eleven": None},
+    "en": {"voice": "en-GB-SoniaNeural", "tl": "en-GB", "xml": "en-GB", "eleven": None},
 }
 
 
@@ -167,6 +175,58 @@ def azure_render(words, voice, rate, pitch, xml_lang):
     return out
 
 
+def eleven_render(words, voice_id, model, lang, speed, stability, seed, batch=40):
+    """Liefert {Wort: float32-Array}; schneidet Sätze „A. B. C.“ an Zeitstempeln."""
+    key = os.environ["ELEVENLABS_API_KEY"]
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    out = {}
+    for i in range(0, len(words), batch):
+        chunk = words[i:i + batch]
+        text, spans = "", []
+        for w in chunk:
+            spans.append((len(text), len(text) + len(w)))
+            text += w + ". "
+        text = text.rstrip()
+        body = {"text": text, "model_id": model, "language_code": lang, "seed": seed,
+                "voice_settings": {"stability": stability, "similarity_boost": 0.75,
+                                   "style": 0.0, "use_speaker_boost": True,
+                                   "speed": speed}}
+        tag = hashlib.sha256(json.dumps([voice_id, body], sort_keys=True,
+                                        ensure_ascii=False).encode()).hexdigest()[:16]
+        cache = CACHE_DIR / f"{tag}.json"
+        if cache.exists():
+            resp = json.loads(cache.read_text(encoding="utf-8"))
+        else:
+            print(f"  ElevenLabs: {len(chunk)} Wörter, {len(text)} Zeichen", file=sys.stderr)
+            req = urllib.request.Request(
+                f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}/with-timestamps"
+                "?output_format=pcm_24000",
+                data=json.dumps(body).encode(), method="POST",
+                headers={"xi-api-key": key, "Content-Type": "application/json"})
+            try:
+                with urllib.request.urlopen(req, timeout=180) as r:
+                    resp = json.loads(r.read())
+            except urllib.error.HTTPError as e:
+                raise RuntimeError(f"ElevenLabs {e.code}: {e.read()[:300]!r}") from None
+            cache.write_text(json.dumps({"text": text, **resp}), encoding="utf-8")
+        pcm = base64.b64decode(resp["audio_base64"])
+        x = np.frombuffer(pcm, dtype="<i2").astype(np.float32) / 32768
+        al = resp["alignment"]
+        if "".join(al["characters"]) != text:
+            raise RuntimeError(f"Zeitstempel passen nicht zum Text (Batch ab {chunk[0]!r})")
+        t0, t1 = al["character_start_times_seconds"], al["character_end_times_seconds"]
+        bounds = [(t0[a], t1[b - 1]) for a, b in spans]
+        end_all = len(x) / SR
+        for j, (w, (s, e)) in enumerate(zip(chunk, bounds)):
+            # Rand vorn/hinten, aber höchstens bis zur Mitte der Lücke zum Nachbarwort
+            prev_e = bounds[j - 1][1] if j else 0.0
+            next_s = bounds[j + 1][0] if j + 1 < len(bounds) else end_all
+            lo = max(s - 0.10, (prev_e + s) / 2)
+            hi = min(e + 0.35, (e + next_s) / 2)
+            out[w] = x[int(lo * SR):int(hi * SR)].copy()
+    return out
+
+
 # ---------- Signalverarbeitung ----------
 
 def decode(raw):
@@ -215,18 +275,28 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--lang", choices=list(LANGS), default="de")
-    ap.add_argument("--engine", choices=["edge", "piper", "azure", "google"], default="edge")
+    ap.add_argument("--engine", choices=["edge", "piper", "azure", "google", "eleven"],
+                    default="edge")
     ap.add_argument("--voice", help="Standard je Sprache, siehe LANGS")
     ap.add_argument("--rate", default="-20%", help="edge/azure")
     ap.add_argument("--pitch", default="-5Hz", help="edge/azure")
     ap.add_argument("--model", help="piper: Pfad zur .onnx")
     ap.add_argument("--length-scale", type=float, default=1.25,
                     help="piper: >1 = langsamer")
+    ap.add_argument("--eleven-model", default="eleven_multilingual_v2",
+                    help="eleven: z. B. eleven_v3")
+    ap.add_argument("--speed", type=float, default=0.85, help="eleven: 0.7–1.2")
+    ap.add_argument("--stability", type=float, default=0.75, help="eleven")
+    ap.add_argument("--seed", type=int, default=4242, help="eleven")
+    ap.add_argument("--batch", type=int, default=40, help="eleven: Wörter je Request")
     ap.add_argument("--only", help="kommagetrennt, nur diese Wörter neu rendern")
+    ap.add_argument("--mp3-dir", help="Clips als <Wort>.mp3 hierhin statt in die JSON (Proben)")
     a = ap.parse_args()
 
     cfg = LANGS[a.lang]
-    voice = a.voice or cfg["voice"]
+    voice = a.voice or cfg["eleven" if a.engine == "eleven" else "voice"]
+    if not voice:
+        ap.error("--voice fehlt (ElevenLabs-voice_id)")
     clips_path = CLIPS_DIR / f"{a.lang}.json"
     words = load_words(WORDS_DIR / f"{a.lang}.txt")
     if a.only:
@@ -242,14 +312,18 @@ def main():
         raw, missing = piper_render(words, a.model, a.length_scale)
     elif a.engine == "google":
         raw = google_render(words, cfg["tl"])
+    elif a.engine == "eleven":
+        raw = eleven_render(words, voice, a.eleven_model, a.lang, a.speed,
+                            a.stability, a.seed, a.batch)
     else:
         raw = azure_render(words, voice, a.rate, a.pitch, cfg["xml"])
 
     clips, stats = {}, []
-    if a.only and clips_path.exists():
+    if a.only and clips_path.exists() and not a.mp3_dir:
         clips = json.loads(clips_path.read_text(encoding="utf-8"))
     for w in words:
-        mp3 = encode_mp3(process(decode(raw[w])))
+        x = raw[w] if isinstance(raw[w], np.ndarray) else decode(raw[w])
+        mp3 = encode_mp3(process(x))
         back = decode(mp3)  # nach MP3 messen, das hört man später
         dur = len(back) / SR
         peak = 20 * np.log10(np.max(np.abs(back)) + 1e-12)
@@ -275,6 +349,13 @@ def main():
     print(f"\nMedian {med:.2f} s, {total/1e6:.2f} MB MP3, {flagged} markiert",
           file=sys.stderr)
 
+    if a.mp3_dir:
+        d = Path(a.mp3_dir)
+        d.mkdir(parents=True, exist_ok=True)
+        for w in words:
+            (d / f"{w}.mp3").write_bytes(base64.b64decode(clips[w]))
+        print(f"{len(words)} MP3 in {d}", file=sys.stderr)
+        return
     if not a.only:  # Reihenfolge der Liste, entfernte Wörter fallen weg
         clips = {w: clips[w] for w in words}
     CLIPS_DIR.mkdir(parents=True, exist_ok=True)
