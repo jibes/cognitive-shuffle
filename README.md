@@ -1,5 +1,16 @@
-# Einschlafwörter
-https://jibes.github.io/cognitive-shuffle/ (bzw. `index.html`) öffnen (Brave: Hintergrundwiedergabe erlauben), Dauer antippen, sperren. Tippen = nächstes Wort, lange drücken = beenden.
-Neu bauen: `pip install edge-tts numpy` + ffmpeg, dann `python build_clips.py` (Katja); ohne Key: `--engine google`; offline: `--engine piper --model de_DE-thorsten-high.onnx`; Azure: `--engine azure` mit `AZURE_SPEECH_KEY`/`AZURE_SPEECH_REGION`.
-1000 Wörter in `woerter.txt`, Pegel/Tempo oben in `template.html` (Konstanten); das Build-Protokoll markiert Ausreißer (Dauer, Spitze, fehlende Phoneme).
-Die eingecheckte HTML nutzt die Google-Übersetzer-Stimme (`--engine google`), weil edge-tts in der Build-Umgebung nicht erreichbar war; Piper thorsten-high war zu undeutlich.
+# Einschlafwörter / Sleep Words
+
+Einschlafhilfe nach der Cognitive-Shuffle-Methode: neutrale Wörter in wachsenden Pausen, läuft bei gesperrtem Bildschirm weiter.
+**https://jibes.github.io/cognitive-shuffle/** öffnen (Brave: Hintergrundwiedergabe erlauben), Dauer antippen, sperren. Tippen = nächstes Wort, lange drücken = beenden. Sprache folgt dem Browser, umschaltbar oben rechts.
+
+| Ordner | Inhalt |
+|---|---|
+| `web/` | die App (statisch, ES-Module, kein Build): `js/config.js` Stellschrauben, `js/i18n.js` Texte, `clips/<lang>.json` Audio |
+| `words/` | Wortlisten je Sprache, ein Wort pro Zeile |
+| `tools/` | `build_clips.py`: Wortliste → `web/clips/<lang>.json` (TTS, Trimmen, Normalisieren, MP3) |
+| `tests/` | `npm test` (Logik, Node), `npm run e2e` (Browser, Playwright) |
+
+- Lokal: `npm run serve` → http://localhost:8000
+- Clips bauen: `pip install -r tools/requirements.txt` + ffmpeg, dann `python tools/build_clips.py --lang de` (edge-tts Katja/Sonia; ohne Key: `--engine google`; offline: `--engine piper --model …onnx`). Eingecheckt sind Google-Stimmen (edge-tts war in der Build-Umgebung nicht erreichbar).
+- Neue Sprache: `words/<code>.txt`, Eintrag in `LANGS` (`tools/build_clips.py`) und `TEXT` (`web/js/i18n.js`), Clips bauen.
+- Deploy: Push auf `main` → GitHub Actions testet und veröffentlicht `web/` (Pages-Quelle: „GitHub Actions“).

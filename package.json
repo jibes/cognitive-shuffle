@@ -1,0 +1,13 @@
+{
+  "name": "cognitive-shuffle",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "e2e": "node tests/e2e.mjs",
+    "serve": "python3 -m http.server 8000 -d web"
+  },
+  "devDependencies": {
+    "playwright": "1.56.1"
+  }
+}

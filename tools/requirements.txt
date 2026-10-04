@@ -1,0 +1,3 @@
+numpy
+edge-tts
+# optional, offline: piper-tts

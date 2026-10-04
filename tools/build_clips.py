@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
-"""Rendert woerter.txt zu MP3-Clips und baut index.html.
+"""Rendert words/<lang>.txt zu MP3-Clips -> web/clips/<lang>.json ({Wort: base64-MP3}).
 
 Engines (Reihenfolge laut Spezifikation):
-  edge   – edge-tts, de-DE-KatjaNeural, rate -20 %, pitch -5 Hz (Standard)
+  edge   – edge-tts, Katja / Sonia (Neural), rate -20 %, pitch -5 Hz (Standard)
   piper  – Piper offline, z. B. de_DE-thorsten-high.onnx (--model)
   azure  – Azure Speech REST (AZURE_SPEECH_KEY, AZURE_SPEECH_REGION)
   google – Google-Übersetzer-Stimme (inoffiziell, ohne Key, kein Tempo-Regler)
 
 Braucht ffmpeg im PATH. Beispiele:
-  python build_clips.py
-  python build_clips.py --engine piper --model de_DE-thorsten-high.onnx
-  python build_clips.py --voice de-DE-AmalaNeural --only Würfel,Löffel
+  python tools/build_clips.py --lang de
+  python tools/build_clips.py --lang en --engine google
+  python tools/build_clips.py --lang de --engine piper --model de_DE-thorsten-high.onnx
+  python tools/build_clips.py --lang de --only Würfel,Löffel   # nur diese neu, Rest bleibt
 """
 
 import argparse
@@ -27,13 +28,20 @@ from pathlib import Path
 
 import numpy as np
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent.parent
+WORDS_DIR = ROOT / "words"
+CLIPS_DIR = ROOT / "web" / "clips"
 SR = 24000  # Arbeits- und Ausgaberate der Clips
 TRIM_DB = -45.0
 FADE_IN_S = 0.030
 FADE_OUT_S = 0.040  # gegen Knacken am Clipende
 PEAK_DBFS = -3.0
 BITRATE = "48k"
+# Neue Sprache: Eintrag hier, words/<code>.txt und Texte in web/js/i18n.js
+LANGS = {
+    "de": {"voice": "de-DE-KatjaNeural", "tl": "de", "xml": "de-DE"},
+    "en": {"voice": "en-GB-SoniaNeural", "tl": "en-GB", "xml": "en-GB"},
+}
 
 
 def load_words(path):
@@ -115,14 +123,14 @@ def piper_render(words, model, length_scale, speaker=None):
     return out, missing
 
 
-def google_render(words):
+def google_render(words, tl):
     import time
     import urllib.parse
 
     out = {}
     for w in words:
         url = ("https://translate.googleapis.com/translate_tts?ie=UTF-8&client=gtx"
-               "&tl=de&q=" + urllib.parse.quote(w))
+               "&tl=" + tl + "&q=" + urllib.parse.quote(w))
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
         for attempt in range(4):
             try:
@@ -137,16 +145,16 @@ def google_render(words):
     return out
 
 
-def azure_render(words, voice, rate, pitch):
+def azure_render(words, voice, rate, pitch, xml_lang):
     key = os.environ["AZURE_SPEECH_KEY"]
     region = os.environ["AZURE_SPEECH_REGION"]
     url = f"https://{region}.tts.speech.microsoft.com/cognitiveservices/v1"
     out = {}
     for w in words:
         ssml = (
-            '<speak version="1.0" xml:lang="de-DE"><voice name="%s">'
+            '<speak version="1.0" xml:lang="%s"><voice name="%s">'
             '<prosody rate="%s" pitch="%s">%s</prosody></voice></speak>'
-            % (voice, rate, pitch, w.replace("&", "&amp;").replace("<", "&lt;"))
+            % (xml_lang, voice, rate, pitch, w.replace("&", "&amp;").replace("<", "&lt;"))
         )
         req = urllib.request.Request(url, data=ssml.encode(), headers={
             "Ocp-Apim-Subscription-Key": key,
@@ -206,38 +214,40 @@ def process(x):
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--lang", choices=list(LANGS), default="de")
     ap.add_argument("--engine", choices=["edge", "piper", "azure", "google"], default="edge")
-    ap.add_argument("--voice", default="de-DE-KatjaNeural")
+    ap.add_argument("--voice", help="Standard je Sprache, siehe LANGS")
     ap.add_argument("--rate", default="-20%", help="edge/azure")
     ap.add_argument("--pitch", default="-5Hz", help="edge/azure")
     ap.add_argument("--model", help="piper: Pfad zur .onnx")
     ap.add_argument("--length-scale", type=float, default=1.25,
                     help="piper: >1 = langsamer")
-    ap.add_argument("--words", type=Path, default=ROOT / "woerter.txt")
-    ap.add_argument("--only", help="kommagetrennt, nur diese Wörter (Test)")
-    ap.add_argument("--template", type=Path, default=ROOT / "template.html")
-    ap.add_argument("--out", type=Path, default=ROOT / "index.html")
-    ap.add_argument("--clips", type=Path, default=ROOT / "clips.json")
+    ap.add_argument("--only", help="kommagetrennt, nur diese Wörter neu rendern")
     a = ap.parse_args()
 
-    words = load_words(a.words)
+    cfg = LANGS[a.lang]
+    voice = a.voice or cfg["voice"]
+    clips_path = CLIPS_DIR / f"{a.lang}.json"
+    words = load_words(WORDS_DIR / f"{a.lang}.txt")
     if a.only:
         words = [unicodedata.normalize("NFC", w.strip()) for w in a.only.split(",")]
-    print(f"{len(words)} Wörter, Engine {a.engine}", file=sys.stderr)
+    print(f"{len(words)} Wörter ({a.lang}), Engine {a.engine}", file=sys.stderr)
 
     missing = {}
     if a.engine == "edge":
-        raw = asyncio.run(edge_render(words, a.voice, a.rate, a.pitch))
+        raw = asyncio.run(edge_render(words, voice, a.rate, a.pitch))
     elif a.engine == "piper":
         if not a.model:
             ap.error("--model fehlt")
         raw, missing = piper_render(words, a.model, a.length_scale)
     elif a.engine == "google":
-        raw = google_render(words)
+        raw = google_render(words, cfg["tl"])
     else:
-        raw = azure_render(words, a.voice, a.rate, a.pitch)
+        raw = azure_render(words, voice, a.rate, a.pitch, cfg["xml"])
 
     clips, stats = {}, []
+    if a.only and clips_path.exists():
+        clips = json.loads(clips_path.read_text(encoding="utf-8"))
     for w in words:
         mp3 = encode_mp3(process(decode(raw[w])))
         back = decode(mp3)  # nach MP3 messen, das hört man später
@@ -265,13 +275,12 @@ def main():
     print(f"\nMedian {med:.2f} s, {total/1e6:.2f} MB MP3, {flagged} markiert",
           file=sys.stderr)
 
-    a.clips.write_text(json.dumps(clips, ensure_ascii=False), encoding="utf-8")
-    html = a.template.read_text(encoding="utf-8")
-    if "__CLIPS__" not in html:
-        sys.exit("Platzhalter __CLIPS__ fehlt in der Vorlage")
-    html = html.replace("__CLIPS__", json.dumps(clips, ensure_ascii=False))
-    a.out.write_text(html, encoding="utf-8")
-    print(f"{a.out.name}: {a.out.stat().st_size/1e6:.2f} MB", file=sys.stderr)
+    if not a.only:  # Reihenfolge der Liste, entfernte Wörter fallen weg
+        clips = {w: clips[w] for w in words}
+    CLIPS_DIR.mkdir(parents=True, exist_ok=True)
+    clips_path.write_text(json.dumps(clips, ensure_ascii=False), encoding="utf-8")
+    print(f"{clips_path.relative_to(ROOT)}: {clips_path.stat().st_size/1e6:.2f} MB, "
+          f"{len(clips)} Wörter", file=sys.stderr)
 
 
 if __name__ == "__main__":
