@@ -43,6 +43,9 @@ CLIPS_DIR = ROOT / "web" / "clips"
 CACHE_DIR = ROOT / "tools" / ".cache" / "eleven"
 # Nachgerenderte Ausreißer: {"<lang>-<f|m>": {Wort: seed}}; --only mit --seed trägt hier ein
 SEEDS_PATH = ROOT / "tools" / "eleven_seeds.json"
+# Ist/Soll je Stimme: {"settings": {Tag: Parameter}, "sets": {"<lang>-<f|m>": {"target": n,
+# "words": {Wort: Tag}}}}; Tag = Hash der Render- und Schnitt-Parameter (ohne Seed)
+STATUS_PATH = ROOT / "tools" / "clips_status.json"
 SR = 24000  # Arbeits- und Ausgaberate der Clips
 TRIM_DB = -45.0  # bezogen auf den fertigen Clip (Spitze PEAK_DBFS)
 FADE_IN_S = 0.030
@@ -81,16 +84,27 @@ def load_words(path):
     return [w for _, ws in load_sections(path) for w in ws]
 
 
-def pick_spread(path, n):
+def pick_spread(path, n, keep=()):
     """n Wörter gleichmäßig über die Kategorien (anteilig), je Kategorie gleichmäßig verteilt.
-    Deterministisch: dieselbe Liste ergibt dieselbe Auswahl."""
+    Wörter aus keep bleiben drin und zählen auf die Quote ihrer Kategorie (Aufstocken ohne
+    Neurendern). Deterministisch: dieselbe Liste ergibt dieselbe Auswahl."""
     secs = load_sections(path)
     total = sum(len(ws) for _, ws in secs)
     quota = [n * len(ws) / total for _, ws in secs]
     k = [int(q) for q in quota]
     for i in sorted(range(len(secs)), key=lambda i: k[i] - quota[i])[:n - sum(k)]:
         k[i] += 1  # größte Reste
-    chosen = {ws[int((j + 0.5) * len(ws) / ki)] for (_, ws), ki in zip(secs, k) for j in range(ki)}
+
+    def spread(ws, m):
+        return {ws[int((j + 0.5) * len(ws) / m)] for j in range(m)} if m > 0 else set()
+
+    chosen = set()
+    for (_, ws), ki in zip(secs, k):
+        free = [w for w in ws if w not in keep]
+        chosen |= set(ws) - set(free)
+        chosen |= spread(free, min(ki - (len(ws) - len(free)), len(free)))
+    # Kategorien, die schon über ihrer Quote liegen, hinterlassen eine Lücke: auffüllen
+    chosen |= spread([w for _, ws in secs for w in ws if w not in chosen], n - len(chosen))
     return [w for _, ws in secs for w in ws if w in chosen]
 
 
@@ -368,17 +382,38 @@ def main():
     ap.add_argument("--count", type=int, help="nur so viele Wörter, gleichmäßig über die Kategorien")
     ap.add_argument("--only", help="kommagetrennt, nur diese Wörter neu rendern")
     ap.add_argument("--mp3-dir", help="Clips als <Wort>.mp3 hierhin statt in die JSON (Proben)")
+    ap.add_argument("--status", action="store_true",
+                    help="eleven: Ist/Soll je Stimme aus tools/clips_status.json, rendert nichts")
     a = ap.parse_args()
 
+    if a.status:
+        return print_status(a)
     cfg = LANGS[a.lang]
     eleven = a.engine == "eleven"
     voice = a.voice or (cfg["eleven"][a.gender] if eleven else cfg["voice"])
     clips_path = CLIPS_DIR / (f"{a.lang}-{a.gender}.json" if eleven else f"{a.lang}.json")
     words_path = WORDS_DIR / f"{a.lang}.txt"
-    words = pick_spread(words_path, a.count) if a.count else load_words(words_path)
+    set_id = f"{a.lang}-{a.gender}"
+    # Ist/Soll führen nur für echte Clip-Sätze (nicht Proben, nicht fremde Stimme, kein Batch)
+    track = eleven and not a.mp3_dir and not a.voice and a.batch == 1
+    status, old, tag, current = {"settings": {}, "sets": {}}, {}, None, set()
+    if track:
+        if STATUS_PATH.exists():
+            status = json.loads(STATUS_PATH.read_text(encoding="utf-8"))
+        tag, params = settings_tag(voice, a)
+        status["settings"][tag] = params
+        if clips_path.exists():
+            old = json.loads(clips_path.read_text(encoding="utf-8"))
+        have = status["sets"].get(set_id, {}).get("words", {})
+        current = {w for w in old if have.get(w) == tag}
     if a.only:
-        words = [unicodedata.normalize("NFC", w.strip()) for w in a.only.split(",")]
-    print(f"{len(words)} Wörter ({a.lang}), Engine {a.engine}", file=sys.stderr)
+        target = [unicodedata.normalize("NFC", w.strip()) for w in a.only.split(",")]
+        words = target
+    else:
+        target = (pick_spread(words_path, a.count, current) if a.count
+                  else load_words(words_path))
+        words = [w for w in target if w not in current]  # Rest liegt aktuell vor
+    print(f"{len(words)} Wörter ({a.lang}) zu rendern, Engine {a.engine}", file=sys.stderr)
 
     missing = {}
     if a.engine == "edge":
@@ -404,7 +439,9 @@ def main():
         raw = azure_render(words, voice, a.rate, a.pitch, cfg["xml"])
 
     clips, stats = {}, []
-    if a.only and clips_path.exists() and not a.mp3_dir:
+    if track:
+        clips = dict(old)
+    elif a.only and clips_path.exists() and not a.mp3_dir:
         clips = json.loads(clips_path.read_text(encoding="utf-8"))
     for w in words:
         x = raw[w] if isinstance(raw[w], np.ndarray) else decode(raw[w])
@@ -415,7 +452,7 @@ def main():
         clips[w] = base64.b64encode(mp3).decode("ascii")
         stats.append((w, dur, peak, len(mp3)))
 
-    med = statistics.median(s[1] for s in stats)
+    med = statistics.median(s[1] for s in stats) if stats else 0.0
     flagged = 0
     for w, dur, peak, size in stats:
         why = []
@@ -442,11 +479,49 @@ def main():
         print(f"{len(words)} MP3 in {d}", file=sys.stderr)
         return
     if not a.only:  # Reihenfolge der Liste, entfernte Wörter fallen weg
-        clips = {w: clips[w] for w in words}
+        clips = {w: clips[w] for w in target}
     CLIPS_DIR.mkdir(parents=True, exist_ok=True)
     clips_path.write_text(json.dumps(clips, ensure_ascii=False), encoding="utf-8")
     print(f"{clips_path.relative_to(ROOT)}: {clips_path.stat().st_size/1e6:.2f} MB, "
           f"{len(clips)} Wörter", file=sys.stderr)
+    if track:
+        st = status["sets"].setdefault(set_id, {"target": 0, "words": {}})
+        if a.only:
+            st["words"].update({w: tag for w in words})
+        else:
+            st["target"] = len(target)
+            st["words"] = {w: tag for w in target}
+        st["words"] = {w: st["words"][w] for w in clips if w in st["words"]}
+        STATUS_PATH.write_text(json.dumps(status, ensure_ascii=False, indent=1, sort_keys=True)
+                               + "\n", encoding="utf-8")
+
+
+def settings_tag(voice, a):
+    """Kurzer Hash über alles, was den fertigen Clip bestimmt (außer dem Seed je Wort)."""
+    params = {"voice": voice, "model": a.eleven_model, "direction": a.direction,
+              "stability": a.stability, "similarity_boost": 0.75, "speed": a.speed,
+              "trim_db": TRIM_DB, "tail_s": TAIL_S, "fade_in_s": FADE_IN_S,
+              "fade_out_s": FADE_OUT_S, "stray_gap_s": STRAY_GAP_S, "stray_db": STRAY_DB,
+              "peak_dbfs": PEAK_DBFS, "bitrate": BITRATE, "sr": SR}
+    if a.eleven_model.startswith("eleven_v4"):
+        del params["speed"]
+    return hashlib.sha256(json.dumps(params, sort_keys=True).encode()).hexdigest()[:8], params
+
+
+def print_status(a):
+    """Soll = Zielzahl, Ist = Wörter in der Clip-Datei; aktuell = mit heutigen Einstellungen."""
+    status = (json.loads(STATUS_PATH.read_text(encoding="utf-8")) if STATUS_PATH.exists()
+              else {"sets": {}})
+    print(f"{'Stimme':<6} {'Soll':>5} {'Ist':>5} {'aktuell':>8} {'veraltet':>9} {'fehlt':>6}")
+    for lang, cfg in LANGS.items():
+        for g, voice in cfg["eleven"].items():
+            set_id, path = f"{lang}-{g}", CLIPS_DIR / f"{lang}-{g}.json"
+            ist = set(json.loads(path.read_text(encoding="utf-8"))) if path.exists() else set()
+            tag, _ = settings_tag(voice, a)
+            st = status["sets"].get(set_id, {"target": 0, "words": {}})
+            cur = {w for w in ist if st["words"].get(w) == tag}
+            print(f"{set_id:<6} {st['target']:>5} {len(ist):>5} {len(cur):>8} "
+                  f"{len(ist) - len(cur):>9} {max(0, st['target'] - len(cur)):>6}")
 
 
 if __name__ == "__main__":
