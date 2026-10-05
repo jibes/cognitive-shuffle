@@ -225,6 +225,39 @@ for (const [locale, title, heading] of [["de-DE", "Einschlafwörter", "So geht�
   await ctx.close();
 }
 
+// Schrift kommt vom eigenen Server, keine Anfrage an Fremdanbieter
+{
+  const ctx = await browser.newContext({ locale: "de-DE" });
+  const p = await ctx.newPage();
+  const foreign = [];
+  p.on("request", r => { if (new URL(r.url()).origin !== new URL(base).origin) foreign.push(r.url()); });
+  await p.goto(base);
+  await p.evaluate(() => document.fonts.ready);
+  const loaded = await p.evaluate(() => document.fonts.check('italic 300 16px "Newsreader"')
+    && [...document.fonts].some(f => f.family.replace(/"/g, "") === "Newsreader" && f.status === "loaded"));
+  check(loaded, "Schrift Newsreader selbst ausgeliefert und geladen");
+  check(foreign.length === 0, `keine Fremdanbieter-Anfragen${foreign.length ? ": " + foreign.join(", ") : ""}`);
+  await ctx.close();
+}
+
+// Vorbereitung abbrechen: Esc bzw. Halten führt zurück zur Startseite, Wörter nicht verbraucht
+{
+  const p = await page("de-DE");
+  await p.click('#wheel [data-min="120"]');
+  const deck0 = await p.evaluate(() => localStorage.getItem("ew-deck"));
+  await p.click("#go");
+  await p.keyboard.press("Escape");
+  await p.waitForTimeout(1500);
+  check(!(await p.$eval("#start", e => e.hidden)) && await p.$eval("#player", a => !a.src.startsWith("blob:")),
+    "Vorbereitung: Esc bricht ab, zurück zur Startseite");
+  check(await p.evaluate(() => localStorage.getItem("ew-deck")) === deck0, "Vorbereitung: Abbruch verbraucht keine Wörter");
+  await p.click("#go");
+  await p.mouse.move(180, 300); await p.mouse.down(); await p.waitForTimeout(1500); await p.mouse.up();
+  await p.waitForTimeout(500);
+  check(!(await p.$eval("#start", e => e.hidden)), "Vorbereitung: Halten bricht ab");
+  await p.context().close();
+}
+
 // Lange Sitzung: „Wird vorbereitet …“, bis sie spielt
 {
   const p = await page("de-DE");

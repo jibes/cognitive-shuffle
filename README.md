@@ -23,6 +23,7 @@ Einschlafhilfe nach der Cognitive-Shuffle-Methode: neutrale Wörter in wachsende
 | Teil | Lizenz |
 |---|---|
 | Code (`web/js`, `web/css`, `web/sw.js`, HTML, `tools/`, `tests/`), Icons | [MIT](LICENSE) |
+| Schrift Newsreader `web/fonts/` (selbst ausgeliefert, keine Fremdanbieter) | [SIL OFL 1.1](web/fonts/OFL.txt) |
 | Wortlisten `words/*.txt`, Oberflächen- und Info-Texte | [CC BY 4.0](words/LICENSE) |
 | Hintergrund-Aufnahmen `web/sounds/*.mp3` | CC BY 4.0 der Urheber, [Nachweis](web/sounds/CREDITS.md) |
 | Wort-Clips `web/clips/*.json` (ElevenLabs) | [alle Rechte vorbehalten](web/clips/LICENSE) |

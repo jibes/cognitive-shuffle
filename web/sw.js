@@ -2,7 +2,7 @@
 //
 // App-Hülle (HTML/JS/CSS/Icons): Netz zuerst mit Zeitlimit, sonst Cache –
 //   online gibt es immer die neueste Fassung, offline die zuletzt gesehene.
-// Clips (clips/*.json), Hintergrund-Aufnahmen (sounds/*.mp3) und Schriften: Cache zuerst,
+// Clips (clips/*.json), Hintergrund-Aufnahmen (sounds/*.mp3) und Schriften (fonts/): Cache zuerst,
 //   im Hintergrund nachladen.
 
 const CACHE = "ew-v2";  // neu bei geändertem Clip-Schema: alte Caches fliegen raus
@@ -34,6 +34,8 @@ const SHELL = [
   "icon-maskable-512.png",
   "manifest.de.webmanifest",
   "manifest.en.webmanifest",
+  "fonts/newsreader-latin-opsz-normal.woff2",
+  "fonts/newsreader-latin-opsz-italic.woff2",
 ];
 
 self.addEventListener("install", event => {
@@ -56,10 +58,9 @@ self.addEventListener("fetch", event => {
   const req = event.request;
   if (req.method !== "GET") return;
   const url = new URL(req.url);
-  const fonts = url.hostname === "fonts.googleapis.com" || url.hostname === "fonts.gstatic.com";
-  if (url.origin !== location.origin && !fonts) return;
+  if (url.origin !== location.origin) return;
 
-  if (fonts || url.pathname.includes("/clips/") || url.pathname.includes("/sounds/")) {
+  if (["/clips/", "/sounds/", "/fonts/"].some(d => url.pathname.includes(d))) {
     event.respondWith(cacheFirst(event, req));
   } else {
     event.respondWith(networkFirst(req));

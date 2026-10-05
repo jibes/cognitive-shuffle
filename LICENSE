@@ -30,4 +30,5 @@ HTML markup, tools/, tests/). Other parts are licensed separately:
 - web/sounds/*.mp3: third-party recordings under CC BY 4.0, see
   web/sounds/CREDITS.md
 - web/clips/*.json (voice clips): all rights reserved, see web/clips/LICENSE
+- web/fonts/ (Newsreader): SIL Open Font License 1.1, see web/fonts/OFL.txt
 - icons and favicons (web/*.png, web/favicon.svg): MIT, like the code

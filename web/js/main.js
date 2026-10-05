@@ -121,9 +121,16 @@ async function start() {
     const all = Object.keys(await loadBundle(set));
     const s = { set, lang, durationS: minutes * 60, marks: onsets(minutes * 60),
       deck: loadDeck(all), seed: (Math.random() * 2 ** 31) | 0, sound: soundSetting() };
+    const deckBefore = storage.get(KEYS.deck(s.lang));
     await fillWords(s);
     const url = await mix(s, 0, f => {
+      if (phase !== "building") throw new Error("abgebrochen");  // Mischen nicht zu Ende rechnen
       ui.building.textContent = `${TEXT[s.lang].preparing} ${Math.round(100 * f)} %`;
+    }).catch(e => {
+      if (phase !== "building") {  // abgebrochen: Wörter nicht verbrauchen
+        if (deckBefore == null) storage.remove(KEYS.deck(s.lang)); else storage.set(KEYS.deck(s.lang), deckBefore);
+      }
+      throw e;
     });
     ui.building.hidden = true;
     if (phase !== "building") { URL.revokeObjectURL(url); return; }
@@ -132,9 +139,18 @@ async function start() {
     stage.play(url, s.marks, { title: TEXT[s.lang].title, artist: TEXT[s.lang].artist });
   } catch (e) {
     ui.building.hidden = true;
+    if (phase !== "building") return;  // abgebrochen
     stage.stop();
     showStart(TEXT[lang].fail);
   }
+}
+
+// Vorbereitung abbrechen (Halten oder Esc), zurück zur Startseite
+function cancelBuild() {
+  if (phase !== "building") return;
+  ui.building.hidden = true;
+  stage.stop();
+  showStart();
 }
 
 // Änderungen während der Sitzung sammeln und den Rest neu mischen (nie zwei Mischungen zugleich).
@@ -371,7 +387,12 @@ function holdFrame() {
   if (holdStart) {
     const p = Math.min(1, (performance.now() - holdStart) / CONTROLS.holdMs);
     setRing(p);
-    if (p >= 1) { holdStart = 0; ui.hold.hidden = true; openPanel(); return; }
+    if (p >= 1) {
+      holdStart = 0;
+      ui.hold.hidden = true;
+      if (phase === "building") cancelBuild(); else openPanel();
+      return;
+    }
   } else {
     setRing(Math.max(0, holdProgress - 0.06));  // loslassen: Ring läuft zurück
     if (holdProgress <= 0) { ui.hold.hidden = true; if (ui.panel.hidden) stage.hideWord = false; return; }
@@ -379,7 +400,7 @@ function holdFrame() {
   holdRaf = requestAnimationFrame(holdFrame);
 }
 function holdDown() {
-  if (phase !== "playing" || !ui.panel.hidden) return;
+  if (!(phase === "playing" || phase === "building") || !ui.panel.hidden) return;
   holdStart = performance.now();
   ui.hold.hidden = false;
   stage.hideWord = true;
@@ -456,6 +477,7 @@ ui.stage.addEventListener("click", e => {
 ui.stage.addEventListener("contextmenu", e => e.preventDefault());
 // Tastatur: Leertaste oder Enter öffnet das Bedienfeld (Esc schließt es)
 document.addEventListener("keydown", e => {
+  if (phase === "building" && e.key === "Escape") { cancelBuild(); return; }
   if (phase !== "playing" || !ui.panel.hidden || e.repeat) return;
   if (e.key === " " || e.key === "Enter") { e.preventDefault(); openPanel(true); }
 });

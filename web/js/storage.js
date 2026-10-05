@@ -8,6 +8,9 @@ export const storage = {
   set(key, value) {
     try { localStorage.setItem(key, value); } catch (e) { /* egal */ }
   },
+  remove(key) {
+    try { localStorage.removeItem(key); } catch (e) { /* egal */ }
+  },
   getJSON(key) {
     try { return JSON.parse(this.get(key)); } catch (e) { return null; }
   },
