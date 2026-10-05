@@ -12,6 +12,7 @@ export function createWheel(el, { min, max, step, value, onChange }) {
   }
   const item = v => track.querySelector(`[data-min="${v}"]`);
   let current = null, settle = 0;
+  let target = null;  // Ziel einer programmgesteuerten Bewegung: Zwischenstände nicht übernehmen
 
   function center(v, smooth) {
     const it = item(v);
@@ -28,7 +29,11 @@ export function createWheel(el, { min, max, step, value, onChange }) {
   function select(v, smooth) {
     v = Math.min(max, Math.max(min, v));
     mark(v);
+    target = smooth ? v : null;
     center(v, smooth);
+  }
+  for (const ev of ["pointerdown", "touchstart", "wheel"]) {
+    el.addEventListener(ev, () => { target = null; }, { passive: true });  // Nutzer übernimmt
   }
   // Nach dem Wischen: die Zahl in der Mitte gilt
   el.addEventListener("scroll", () => {
@@ -40,6 +45,7 @@ export function createWheel(el, { min, max, step, value, onChange }) {
         const d = Math.abs(it.offsetLeft + it.offsetWidth / 2 - mid);
         if (d < dist) { dist = d; best = Number(it.dataset.min); }
       }
+      if (target != null) { if (best === target) target = null; return; }
       mark(best);
     }, 90);
   }, { passive: true });
