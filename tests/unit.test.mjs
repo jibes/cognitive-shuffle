@@ -236,7 +236,8 @@ test("Manifeste: je Sprache vorhanden, gleich aufgebaut, Icons existieren", asyn
     assert.equal(m.lang, l);
     assert.equal(m.short_name, TEXT[l].appName);
     assert.deepEqual(Object.keys(m).sort(), Object.keys(base).sort());
-    assert.equal(m.display, "standalone");
+    assert.equal(m.display, "fullscreen");  // ohne Status- und Navigationsleiste (Android); sonst standalone
+    assert.deepEqual(m.display_override, ["fullscreen", "standalone"]);
     for (const i of m.icons) await access(new URL(i.src, web));
     for (const size of ["192x192", "512x512"]) assert.ok(m.icons.some(i => i.sizes === size), size);
     assert.ok(m.icons.some(i => i.purpose === "maskable"));

@@ -1,7 +1,7 @@
 # Einschlafwörter / Sleep Words
 
 Einschlafhilfe nach der Cognitive-Shuffle-Methode: neutrale Wörter in wachsenden Pausen, läuft bei gesperrtem Bildschirm weiter.
-**https://jibes.github.io/cognitive-shuffle/** öffnen (Brave: Hintergrundwiedergabe erlauben), Stimme (weiblich/männlich), Hintergrund (Stille, Rauschen, Regen, Wellen) und Lautstärke wählen (kurze Hörprobe), Dauer am Rad (5–120 min), Starten, sperren. Während der Sitzung: gedrückt halten, bis der Ring voll ist → Bedienfeld (Hintergrund, Lautstärke, ±5 min, Beenden); kurzes Tippen bewirkt nichts. Sprache folgt dem Browser, Auswahlliste oben rechts. Installierbar („Zum Startbildschirm“ / „App installieren“); nach einem Online-Besuch läuft sie offline (Service Worker `web/sw.js`; Clips der zuletzt genutzten Sprachen).
+**https://jibes.github.io/cognitive-shuffle/** öffnen (Brave: Hintergrundwiedergabe erlauben), Stimme (weiblich/männlich), Hintergrund (Stille, Rauschen, Regen, Wellen) und Lautstärke wählen (kurze Hörprobe), Dauer am Rad (5–120 min), Starten, sperren. Während der Sitzung: gedrückt halten, bis der Ring voll ist → Bedienfeld (Hintergrund, Lautstärke, ±5 min, Beenden); kurzes Tippen bewirkt nichts. Sprache folgt dem Browser, Auswahlliste oben rechts. Installierbar („Zum Startbildschirm“ / „App installieren“), installiert im Vollbild ohne Status- und Navigationsleiste (Android; iPhone erlaubt das nicht), im Browser Vollbild während der Sitzung; nach einem Online-Besuch läuft sie offline (Service Worker `web/sw.js`; Clips der zuletzt genutzten Sprachen).
 
 | Ordner | Inhalt |
 |---|---|

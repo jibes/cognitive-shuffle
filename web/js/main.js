@@ -109,6 +109,7 @@ async function start() {
   phase = "building";
   stopPreview();
   stage.unlock();  // iOS: noch im Tap
+  enterFullscreen();  // ebenfalls nur im Tap erlaubt
   ui.start.hidden = true;
   ui.stage.hidden = false;
   showHoldHint();
@@ -223,7 +224,30 @@ function endSession() {
   showStart();
 }
 
+// Vollbild während der Sitzung: blendet Status- und Navigationsleiste aus (Android, Desktop).
+// iPhone erlaubt das Webseiten nicht. Installiert läuft die App ohnehin im Vollbild (Manifest).
+let ownFullscreen = false;
+function enterFullscreen() {
+  const el = document.documentElement;
+  const req = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (!req || document.fullscreenElement || document.webkitFullscreenElement) return;
+  try {
+    const p = req.call(el, { navigationUI: "hide" });
+    ownFullscreen = true;
+    if (p && p.catch) p.catch(() => { ownFullscreen = false; });
+  } catch (e) { /* nicht erlaubt */ }
+}
+function exitFullscreen() {
+  if (!ownFullscreen) return;
+  ownFullscreen = false;
+  const exit = document.exitFullscreen || document.webkitExitFullscreen;
+  if (exit && (document.fullscreenElement || document.webkitFullscreenElement)) {
+    try { const p = exit.call(document); if (p && p.catch) p.catch(() => {}); } catch (e) { /* egal */ }
+  }
+}
+
 function showStart(message = "") {
+  exitFullscreen();
   phase = "start";
   ui.stage.hidden = true;
   ui.start.hidden = false;

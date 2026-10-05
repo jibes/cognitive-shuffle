@@ -191,8 +191,11 @@ for (const [locale, title, heading] of [["de-DE", "Einschlafwörter", "So geht�
   await p.click("#resume");
   check(await p.$eval("#panel", e => e.hidden), "Weiter: Bedienfeld zu");
   await hold(1500);
+  check(await p.evaluate(() => !!document.fullscreenElement), "Vollbild während der Sitzung");
   await p.click("#end");
   check(!(await p.$eval("#start", e => e.hidden)) && await p.$eval("#player", a => a.paused), "Beenden: zurück zur Startseite, Ton aus");
+  await p.waitForTimeout(300);
+  check(await p.evaluate(() => !document.fullscreenElement), "Startseite: Vollbild wieder aus");
   await p.context().close();
 }
 
