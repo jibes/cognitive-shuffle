@@ -6,7 +6,7 @@ Engines (Reihenfolge laut Spezifikation):
   piper  – Piper offline, z. B. de_DE-thorsten-high.onnx (--model)
   azure  – Azure Speech REST (AZURE_SPEECH_KEY, AZURE_SPEECH_REGION)
   google – Google-Übersetzer-Stimme (inoffiziell, ohne Key, kein Tempo-Regler)
-  eleven – ElevenLabs v3 (ELEVENLABS_API_KEY), Stimme je Sprache und --gender f|m,
+  eleven – ElevenLabs v3 (ELEVENLABS_API_KEY), benannte Stimme je Sprache (--speaker),
            Ausgabe web/clips/<lang>-<f|m>.json. Standard: jedes Wort ein Request mit
            Regie-Tag, ganze Antwort getrimmt; --batch 40 = Sätze „A. B. C.“ mit Schnitt an
            Zeitstempeln (billiger). Rohantworten in tools/.cache/eleven/ (nie doppelt zahlen).
@@ -16,7 +16,8 @@ Braucht ffmpeg im PATH. Beispiele:
   python tools/build_clips.py --lang en --engine google
   python tools/build_clips.py --lang de --engine piper --model de_DE-thorsten-high.onnx
   python tools/build_clips.py --lang de --only Würfel,Löffel   # nur diese neu, Rest bleibt
-  python tools/build_clips.py --lang de --engine eleven --gender m --count 300
+  python tools/build_clips.py --lang de --engine eleven --speaker stefan --count 300
+  python tools/build_clips.py --lang en --engine eleven --speaker rainbird --same-as verity  # neue Stimme, gleiche Wörter
   python tools/build_clips.py --lang de --engine eleven --voice <voice_id> \
       --only Würfel,Löffel --mp3-dir /tmp/probe   # Stimmprobe, Clips-Datei bleibt
 """
@@ -58,11 +59,12 @@ BITRATE = "48k"
 # Neue Sprache: Eintrag hier, words/<code>.txt und Texte in web/js/i18n.js
 LANGS = {
     "de": {"voice": "de-DE-KatjaNeural", "tl": "de", "xml": "de-DE",
-           "eleven": {"f": "Qy4b2JlSGxY7I9M9Bqxb",    # Laura
-                      "m": "iMHt6G42evkXunaDU065"}},  # Stefan
+           "eleven": {"laura": "Qy4b2JlSGxY7I9M9Bqxb",
+                      "stefan": "iMHt6G42evkXunaDU065"}},
     "en": {"voice": "en-GB-SoniaNeural", "tl": "en-GB", "xml": "en-GB",
-           "eleven": {"f": "1hlpeD1ydbI2ow0Tt3EW",    # Verity
-                      "m": "AeRdCCKzvd23BpJoofzx"}},  # Nathaniel
+           "eleven": {"verity": "1hlpeD1ydbI2ow0Tt3EW",
+                      "rainbird": "bgU7lBMo69PNEOWHFqxM",
+                      "nathaniel": "AeRdCCKzvd23BpJoofzx"}},
 }
 ELEVEN_DIRECTION = "[calm, measured, slow]"
 
@@ -377,8 +379,9 @@ def main():
     ap.add_argument("--batch", type=int, default=1,
                     help="eleven: Wörter je Request (1 = sauberster Schnitt, >1 billiger)")
     ap.add_argument("--direction", default=ELEVEN_DIRECTION, help="eleven v3/v4: Regie-Tag")
-    ap.add_argument("--gender", choices=["f", "m"], default="f",
-                    help="eleven: Stimme aus LANGS, Ausgabe web/clips/<lang>-<f|m>.json")
+    ap.add_argument("--same-as", help="eleven: genau die Wörter dieser Stimme derselben Sprache (neue Stimme)")
+    ap.add_argument("--speaker", choices=sorted({k for c in LANGS.values() for k in c["eleven"]}),
+                    help="eleven: Stimme aus LANGS (Standard: erste der Sprache), Ausgabe web/clips/<lang>-<speaker>.json")
     ap.add_argument("--count", type=int, help="nur so viele Wörter, gleichmäßig über die Kategorien")
     ap.add_argument("--only", help="kommagetrennt, nur diese Wörter neu rendern")
     ap.add_argument("--mp3-dir", help="Clips als <Wort>.mp3 hierhin statt in die JSON (Proben)")
@@ -390,10 +393,13 @@ def main():
         return print_status(a)
     cfg = LANGS[a.lang]
     eleven = a.engine == "eleven"
-    voice = a.voice or (cfg["eleven"][a.gender] if eleven else cfg["voice"])
-    clips_path = CLIPS_DIR / (f"{a.lang}-{a.gender}.json" if eleven else f"{a.lang}.json")
+    speaker = a.speaker or next(iter(cfg["eleven"]))
+    if eleven and speaker not in cfg["eleven"]:
+        ap.error(f"--speaker {speaker} gibt es für {a.lang} nicht: {', '.join(cfg['eleven'])}")
+    voice = a.voice or (cfg["eleven"][speaker] if eleven else cfg["voice"])
+    clips_path = CLIPS_DIR / (f"{a.lang}-{speaker}.json" if eleven else f"{a.lang}.json")
     words_path = WORDS_DIR / f"{a.lang}.txt"
-    set_id = f"{a.lang}-{a.gender}"
+    set_id = f"{a.lang}-{speaker}"
     # Ist/Soll führen nur für echte Clip-Sätze (nicht Proben, nicht fremde Stimme, kein Batch)
     track = eleven and not a.mp3_dir and not a.voice and a.batch == 1
     status, old, tag, current = {"settings": {}, "sets": {}}, {}, None, set()
@@ -410,8 +416,13 @@ def main():
         target = [unicodedata.normalize("NFC", w.strip()) for w in a.only.split(",")]
         words = target
     else:
-        target = (pick_spread(words_path, a.count, current) if a.count
-                  else load_words(words_path))
+        if a.same_as:  # neue Stimme: dieselben Wörter wie eine vorhandene derselben Sprache
+            other = json.loads((CLIPS_DIR / f"{a.lang}-{a.same_as}.json").read_text(encoding="utf-8"))
+            target = [w for w in load_words(words_path) if w in other]
+        elif a.count:
+            target = pick_spread(words_path, a.count, current)
+        else:
+            target = load_words(words_path)
         words = [w for w in target if w not in current]  # Rest liegt aktuell vor
     print(f"{len(words)} Wörter ({a.lang}) zu rendern, Engine {a.engine}", file=sys.stderr)
 
@@ -425,7 +436,7 @@ def main():
     elif a.engine == "google":
         raw = google_render(words, cfg["tl"])
     elif a.engine == "eleven":
-        set_id = f"{a.lang}-{a.gender}"
+        set_id = f"{a.lang}-{speaker}"
         seeds = json.loads(SEEDS_PATH.read_text(encoding="utf-8")) if SEEDS_PATH.exists() else {}
         own = seeds.setdefault(set_id, {})
         if a.only and a.seed != ap.get_default("seed") and not a.voice and a.batch == 1:
@@ -512,15 +523,15 @@ def print_status(a):
     """Soll = Zielzahl, Ist = Wörter in der Clip-Datei; aktuell = mit heutigen Einstellungen."""
     status = (json.loads(STATUS_PATH.read_text(encoding="utf-8")) if STATUS_PATH.exists()
               else {"sets": {}})
-    print(f"{'Stimme':<6} {'Soll':>5} {'Ist':>5} {'aktuell':>8} {'veraltet':>9} {'fehlt':>6}")
+    print(f"{'Stimme':<12} {'Soll':>5} {'Ist':>5} {'aktuell':>8} {'veraltet':>9} {'fehlt':>6}")
     for lang, cfg in LANGS.items():
         for g, voice in cfg["eleven"].items():
-            set_id, path = f"{lang}-{g}", CLIPS_DIR / f"{lang}-{g}.json"
+            set_id, path = f"{lang}-{g}", CLIPS_DIR / f"{lang}-{g}.json"  # g = Stimmname
             ist = set(json.loads(path.read_text(encoding="utf-8"))) if path.exists() else set()
             tag, _ = settings_tag(voice, a)
             st = status["sets"].get(set_id, {"target": 0, "words": {}})
             cur = {w for w in ist if st["words"].get(w) == tag}
-            print(f"{set_id:<6} {st['target']:>5} {len(ist):>5} {len(cur):>8} "
+            print(f"{set_id:<12} {st['target']:>5} {len(ist):>5} {len(cur):>8} "
                   f"{len(ist) - len(cur):>9} {max(0, st['target'] - len(cur)):>6}")
 
 

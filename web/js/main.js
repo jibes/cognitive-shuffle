@@ -1,5 +1,5 @@
 import { AMBIENT, SESSION, CONTROLS } from "./config.js";
-import { TEXT, LANGS, pickLang } from "./i18n.js";
+import { TEXT, LANGS, VOICES, LEGACY_VOICE, pickLang } from "./i18n.js";
 import { storage } from "./storage.js";
 import { onsets, replan } from "./schedule.js";
 import { freshDeck, validDeck, draw } from "./deck.js";
@@ -31,7 +31,8 @@ const clipSet = () => `${lang}-${voice}`;  // web/clips/<set>.json, nur die gew�
 // ---------- gespeicherte Einstellungen ----------
 const KEYS = {
   lang: "ew-lang",
-  voice: "ew-voice",
+  voices: "ew-voices",        // { Sprache: Stimme }
+  legacyVoice: "ew-voice",    // früher f|m für alle Sprachen
   sound: "ew-sound",
   level: "ew-level",
   minutes: "ew-minutes",
@@ -51,9 +52,15 @@ const legacy = LEGACY_NOISE[storage.get(KEYS.legacyNoise)];
 if (!sound && legacy) [sound, level] = [legacy[0], legacy[1] ?? AMBIENT.level.default];
 if (!AMBIENT.sounds.includes(sound)) sound = AMBIENT.default;
 if (!(level >= LEVEL_MIN && level <= LEVEL_MAX)) level = AMBIENT.level.default;
-const VOICES = ["f", "m"];
-let voice = storage.get(KEYS.voice);
-if (!VOICES.includes(voice)) voice = VOICES[0];
+// Gewählte Stimme je Sprache; ohne Wahl die erste, alte Wahl f|m wird übernommen
+const voiceChoice = storage.getJSON(KEYS.voices) || {};
+let voice = null;
+function pickVoice(code) {
+  const keys = VOICES[code].map(([k]) => k);
+  const legacy = (LEGACY_VOICE[code] || {})[storage.get(KEYS.legacyVoice)];
+  const v = [voiceChoice[code], legacy].find(k => keys.includes(k));
+  return v || keys[0];
+}
 const soundSetting = () => (sound === "off" ? null : { kind: sound, db: level });
 const M = SESSION.minutes;
 let minutes = Number(storage.get(KEYS.minutes));
@@ -274,6 +281,7 @@ function showStart(message = "") {
 // ---------- Sprache ----------
 function setLang(code, remember) {
   lang = code;
+  voice = pickVoice(code);
   if (remember) storage.set(KEYS.lang, code);
   const t = TEXT[code];
   document.documentElement.lang = code;
@@ -285,6 +293,7 @@ function setLang(code, remember) {
   document.querySelectorAll("[data-t-label]").forEach(el => { el.setAttribute("aria-label", t[el.dataset.tLabel]); });
   document.querySelectorAll("[data-lang-block]").forEach(el => { el.hidden = el.dataset.langBlock !== code; });
   ui.lang.value = code;
+  renderVoice();
   renderSounds();
   wheel.setUnit(t.minutes);
   ui.status.textContent = "";
@@ -305,16 +314,30 @@ function renderLangSwitch() {
 
 // ---------- Bedienung Startseite ----------
 function renderVoice() {
-  document.querySelectorAll("[data-voice]").forEach(b =>
-    b.setAttribute("aria-checked", String(b.dataset.voice === voice)));
+  const box = $("voices");
+  const keys = VOICES[lang].map(([k]) => k);
+  if (box.dataset.lang !== lang) {  // Knöpfe je Sprache neu
+    box.dataset.lang = lang;
+    box.replaceChildren(...VOICES[lang].map(([key, name]) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.setAttribute("role", "radio");
+      b.dataset.voice = key;
+      b.textContent = name;
+      b.addEventListener("click", () => {
+        if (key === voice) return;
+        voice = key;
+        voiceChoice[lang] = key;
+        storage.setJSON(KEYS.voices, voiceChoice);
+        renderVoice();
+        prepare();
+      });
+      return b;
+    }));
+  }
+  if (!keys.includes(voice)) voice = keys[0];
+  for (const b of box.children) b.setAttribute("aria-checked", String(b.dataset.voice === voice));
 }
-document.querySelectorAll("[data-voice]").forEach(b => b.addEventListener("click", () => {
-  if (b.dataset.voice === voice) return;
-  voice = b.dataset.voice;
-  storage.set(KEYS.voice, voice);
-  renderVoice();
-  prepare();
-}));
 
 // Hintergrund: Klang und Lautstärke getrennt; Knöpfe aus AMBIENT.sounds, Texte sound_<name>.
 // Zwei Sätze Bedienelemente (Startseite, Bedienfeld) mit demselben Zustand.
@@ -514,6 +537,5 @@ $("info-done").addEventListener("click", closeInfo);
 info.addEventListener("click", e => { if (e.target === info) closeInfo(); });  // Tipp neben das Blatt
 
 renderLangSwitch();
-renderVoice();
 renderSounds();
 setLang(pickLang(storage.get(KEYS.lang), navigator.languages || [navigator.language]), false);

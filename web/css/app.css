@@ -273,10 +273,12 @@ input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 2px va
   font-size: 1rem;
 }
 
+/* Kein eigener Hintergrund: als eigene Grafikebene (Wort-Animation) weicht die Farbe auf
+   manchen Geräten minimal vom Seitenhintergrund ab – eine sichtbare, flackernde Box. */
 #stage {
   position: fixed;
   inset: 0;
-  background: var(--bg);
+  background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -361,10 +363,9 @@ input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 2px va
   flex-direction: column;
   justify-content: center;
   gap: 20px;
-  opacity: .8;
   animation: panel-in .4s ease-out;
 }
-@keyframes panel-in { from { opacity: 0; } to { opacity: .8; } }
+@keyframes panel-in { from { opacity: 0; } to { opacity: 1; } }
 .remain { display: flex; align-items: center; gap: 12px; }
 .remain .adj { width: 64px; height: 64px; flex: none; font-size: 1.5rem; font-style: normal; color: var(--text); }
 .remain .adj:active { background: var(--line); }

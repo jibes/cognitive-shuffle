@@ -1,11 +1,14 @@
 {
- "de-f": {
+ "de-laura": {
   "Reiskorn": 7
  },
- "de-m": {
+ "de-stefan": {
   "Gartenteich": 4243,
   "Halbmond": 4243,
   "Maikäfer": 4243,
   "Wurfring": 7
+ },
+ "en-rainbird": {
+  "hanging basket": 7
  }
 }

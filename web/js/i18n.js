@@ -1,5 +1,5 @@
 // Oberflächentexte je Sprache; sound_<name> für jeden Klang in AMBIENT.sounds. Eine neue Sprache braucht hier einen Eintrag
-// und web/clips/<code>-f.json, <code>-m.json (tools/build_clips.py --lang <code> --gender f|m).
+// und Stimmen in VOICES samt Clips (tools/build_clips.py --lang <code> --speaker <name>).
 
 export const TEXT = {
   de: {
@@ -9,8 +9,6 @@ export const TEXT = {
     artist: "Wörter zum Einschlafen",
     hint: "Handy weglegen und den Wörtern zuhören, bis sie von selbst verklingen.",
     voice: "Stimme",
-    voiceF: "weiblich",
-    voiceM: "männlich",
     sound: "Hintergrund",
     sound_off: "Stille",
     sound_brown: "Rauschen",
@@ -43,8 +41,6 @@ export const TEXT = {
     artist: "Words to fall asleep to",
     hint: "Put the phone down and listen to the words until they fade away on their own.",
     voice: "Voice",
-    voiceF: "female",
-    voiceM: "male",
     sound: "Background",
     sound_off: "Silence",
     sound_brown: "Noise",
@@ -73,6 +69,15 @@ export const TEXT = {
 };
 
 export const LANGS = Object.keys(TEXT);
+
+// Stimmen je Sprache: [Schlüssel, Name]; erste = Standard. Clips: web/clips/<sprache>-<schlüssel>.json
+// (tools/build_clips.py --lang <sprache> --speaker <schlüssel>).
+export const VOICES = {
+  de: [["laura", "Laura"], ["stefan", "Stefan"]],
+  en: [["rainbird", "Rainbird"], ["verity", "Verity"], ["nathaniel", "Nathaniel"]],
+};
+// Frühere Wahl weiblich/männlich
+export const LEGACY_VOICE = { de: { f: "laura", m: "stefan" }, en: { f: "verity", m: "nathaniel" } };
 export const FALLBACK = "en";
 
 // Gespeicherte Wahl, sonst erste passende Browser-/Systemsprache, sonst Englisch.

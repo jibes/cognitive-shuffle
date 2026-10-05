@@ -4,7 +4,7 @@ import { onsets, replan } from "../web/js/schedule.js";
 import { shuffle, freshDeck, validDeck, draw } from "../web/js/deck.js";
 import { mixSession } from "../web/js/mix.js";
 import { createWav } from "../web/js/wav.js";
-import { pickLang, LANGS, TEXT } from "../web/js/i18n.js";
+import { pickLang, LANGS, TEXT, VOICES } from "../web/js/i18n.js";
 import { SESSION, AMBIENT } from "../web/js/config.js";
 import { SOUNDS, makeLoop } from "../web/js/ambient.js";
 
@@ -216,13 +216,15 @@ test("sw.js: App-Hülle vollständig und vorhanden", async () => {
   assert.equal(offline.match(/CACHE = "([^"]+)"/)[1], src.match(/CACHE = "([^"]+)"/)[1], "Cache-Name gleich");
 });
 
-test("Clips: je Sprache weiblich und männlich, gleiche Wörter", async () => {
+test("Clips: jede Stimme je Sprache hat eine Datei, alle mit denselben Wörtern", async () => {
   const { readFile } = await import("node:fs/promises");
   const load = async set => JSON.parse(await readFile(new URL(`../web/clips/${set}.json`, import.meta.url), "utf8"));
   for (const l of LANGS) {
-    const [f, m] = [Object.keys(await load(`${l}-f`)).sort(), Object.keys(await load(`${l}-m`)).sort()];
-    assert.ok(f.length >= 100, `${l}: ${f.length} Wörter`);
-    assert.deepEqual(m, f, `${l}: gleiche Wörter für beide Stimmen`);
+    assert.ok(VOICES[l] && VOICES[l].length >= 1, `${l}: Stimmen fehlen`);
+    const [first, ...rest] = VOICES[l].map(([k]) => k);
+    const words = Object.keys(await load(`${l}-${first}`)).sort();
+    assert.ok(words.length >= 100, `${l}: ${words.length} Wörter`);
+    for (const k of rest) assert.deepEqual(Object.keys(await load(`${l}-${k}`)).sort(), words, `${l}-${k}: gleiche Wörter`);
   }
 });
 

@@ -2,7 +2,7 @@
 // Stimme und die Aufnahme des gewählten Hintergrunds im Offline-Cache liegen – auch beim allerersten Besuch, bei dem die
 // Seite noch nicht vom Service Worker kontrolliert wurde.
 
-const CACHE = "ew-v2";  // wie in sw.js
+const CACHE = "ew-v3";  // wie in sw.js
 
 let ready = null;
 

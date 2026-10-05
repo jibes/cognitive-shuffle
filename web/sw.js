@@ -5,7 +5,7 @@
 // Clips (clips/*.json), Hintergrund-Aufnahmen (sounds/*.mp3) und Schriften (fonts/): Cache zuerst,
 //   im Hintergrund nachladen.
 
-const CACHE = "ew-v2";  // neu bei geändertem Clip-Schema: alte Caches fliegen raus
+const CACHE = "ew-v3";  // neu bei geändertem Clip-Schema: alte Caches fliegen raus
 const NETWORK_TIMEOUT_MS = 3000;
 
 // Muss alle Dateien der App-Hülle enthalten (tests/unit.test.mjs prüft das).

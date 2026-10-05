@@ -100,6 +100,8 @@ for (const [locale, title, heading] of [["de-DE", "Einschlafwörter", "So geht�
 {
   const p = await page("de-DE");
   await p.selectOption("#lang", "en");
+  check(JSON.stringify(await p.$$eval("#voices button", bs => bs.map(b => b.textContent))) === '["Rainbird","Verity","Nathaniel"]',
+    "Umschalter: englische Stimmen Rainbird, Verity, Nathaniel");
   check(await p.textContent("#go") === "Start"
     && await p.textContent("#sounds [data-sound=rain]") === "Rain", "Umschalter: Texte auf Englisch");
   await p.reload();
@@ -109,26 +111,26 @@ for (const [locale, title, heading] of [["de-DE", "Einschlafwörter", "So geht�
   await p.context().close();
 }
 
-// Stimme: männlich lädt nur die eigene Clip-Datei, Wahl bleibt nach Neuladen
+// Stimme: Stefan lädt nur die eigene Clip-Datei, Wahl bleibt nach Neuladen
 {
   const p = await page("de-DE");
   const loaded = [];
   let counting = false;  // erst ab dem Neuladen: vorher Geladenes zählt nicht
   p.on("request", r => { const m = r.url().match(/clips\/([\w-]+)\.json/); if (m && counting) loaded.push(m[1]); });
-  check(await p.getAttribute("[data-voice=f]", "aria-checked") === "true", "Stimme: weiblich vorgewählt");
-  // Erst wenn de-f offline abgelegt ist, sonst kann diese Anfrage noch ins Neuladen fallen
-  for (let t = Date.now(); !(await p.evaluate(async () => !!await (await caches.open("ew-v2")).match("clips/de-f.json")));) {
+  check(await p.getAttribute("[data-voice=laura]", "aria-checked") === "true" && await p.textContent("[data-voice=stefan]") === "Stefan", "Stimme: Laura vorgewählt, Namen statt Geschlecht");
+  // Erst wenn de-laura offline abgelegt ist, sonst kann diese Anfrage noch ins Neuladen fallen
+  for (let t = Date.now(); !(await p.evaluate(async () => !!await (await caches.open("ew-v3")).match("clips/de-laura.json")));) {
     if (Date.now() - t > 30000) break;
     await p.waitForTimeout(200);
   }
-  await p.click("[data-voice=m]");
+  await p.click("[data-voice=stefan]");
   counting = true;
   await p.reload();
-  check(await p.getAttribute("[data-voice=m]", "aria-checked") === "true", "Stimme: Wahl bleibt nach Neuladen");
+  check(await p.getAttribute("[data-voice=stefan]", "aria-checked") === "true", "Stimme: Wahl bleibt nach Neuladen");
   const r = await session(p, "off", 10);
-  check(!r.paused && Math.abs(r.duration - 632) < 1, "Stimme: männliche Sitzung spielt");
-  check(loaded.includes("de-m") && !loaded.includes("de-f"),
-    `Stimme: nach dem Umschalten nur de-m geladen (${[...new Set(loaded)].join(", ")})`);
+  check(!r.paused && Math.abs(r.duration - 632) < 1, "Stimme: Sitzung mit Stefan spielt");
+  check(loaded.includes("de-stefan") && !loaded.includes("de-laura"),
+    `Stimme: nach dem Umschalten nur de-stefan geladen (${[...new Set(loaded)].join(", ")})`);
   await p.context().close();
 }
 
@@ -317,10 +319,11 @@ for (const [locale, title, heading] of [["de-DE", "Einschlafwörter", "So geht�
 // Alte Einstellung (ein Regler „mittel“) wird übernommen: Rauschen, -35 dBFS
 {
   const p = await page("de-DE");
-  await p.evaluate(() => { localStorage.clear(); localStorage.setItem("ew-noise", "medium"); });
+  await p.evaluate(() => { localStorage.clear(); localStorage.setItem("ew-noise", "medium"); localStorage.setItem("ew-voice", "m"); });
   await p.reload();
   check(await p.getAttribute("#sounds [data-sound=brown]", "aria-checked") === "true"
-    && await p.$eval("#level", e => e.value) === "-35", "Alte Einstellung „mittel“ übernommen");
+    && await p.$eval("#level", e => e.value) === "-35"
+    && await p.getAttribute("[data-voice=stefan]", "aria-checked") === "true", "Alte Einstellungen „mittel“ und „männlich“ (→ Stefan) übernommen");
   await p.context().close();
 }
 
@@ -359,8 +362,8 @@ for (const [locale, name] of [["de-DE", "Einschlafen"], ["en-GB", "Sleep Words"]
   // waitForFunction wertet ein Promise als „wahr“ – daher selbst abfragen.
   await p.click("#sounds [data-sound=waves]");  // Aufnahme wird geladen und offline abgelegt
   const cached = () => p.evaluate(async () => {
-    const c = await caches.open("ew-v2");
-    return !!(navigator.serviceWorker.controller && await c.match("clips/de-f.json") && await c.match("./")
+    const c = await caches.open("ew-v3");
+    return !!(navigator.serviceWorker.controller && await c.match("clips/de-laura.json") && await c.match("./")
       && await c.match("sounds/waves.mp3"));
   });
   for (let t = Date.now(); !(await cached()); ) {

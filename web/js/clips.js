@@ -1,6 +1,6 @@
 import { AUDIO } from "./config.js";
 
-// Lädt web/clips/<set>.json ({ Wort: base64-MP3 }; set = Sprache-Stimme, z. B. „de-f“)
+// Lädt web/clips/<set>.json ({ Wort: base64-MP3 }; set = Sprache-Stimme, z. B. „de-laura“)
 // und dekodiert Clips bei Bedarf.
 
 const bundles = new Map();   // set -> Promise<{ Wort: base64 }>
