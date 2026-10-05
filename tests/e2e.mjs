@@ -133,13 +133,14 @@ for (const [locale, title, heading] of [["de-DE", "Einschlafwörter", "So geht�
   check(await p.getAttribute("[data-sound=rain]", "aria-checked") === "true"
     && await p.$eval("#level", e => e.value) === "-35", "Hintergrund: Klang und Lautstärke bleiben nach Neuladen");
   const r = await session(p, "rain", 10);
-  check(!r.paused && Math.abs(r.noiseDb - (-35 - 5.5)) < 2, `Hintergrund: Regen ${r.noiseDb.toFixed(1)} dBFS`);
+  // Aufnahme schwankt kurzfristig, Start zufällig: Messfenster 2 s, daher grob
+  check(!r.paused && Math.abs(r.noiseDb - (-35 - 6)) < 8, `Hintergrund: Regen ${r.noiseDb.toFixed(1)} dBFS`);
   await p.context().close();
   const q = await page("de-DE");
   await q.click("[data-sound=off]");
   check(await q.$eval("#level", e => e.disabled), "Hintergrund: Stille sperrt den Lautstärkeregler");
   const w = await session(q, "waves", 10);
-  check(!w.paused && w.noiseDb < -38 && w.noiseDb > -58, `Hintergrund: Wellen ${w.noiseDb.toFixed(1)} dBFS`);
+  check(!w.paused && w.noiseDb < -35 && w.noiseDb > -75, `Hintergrund: Wellen ${w.noiseDb.toFixed(1)} dBFS`);
   await q.context().close();
 }
 
@@ -186,9 +187,11 @@ for (const [locale, name] of [["de-DE", "Einschlafen"], ["en-GB", "Sleep Words"]
 {
   const p = await page("de-DE", { blockFonts: false });
   // waitForFunction wertet ein Promise als „wahr“ – daher selbst abfragen.
+  await p.click("[data-sound=waves]");  // Aufnahme wird geladen und offline abgelegt
   const cached = () => p.evaluate(async () => {
     const c = await caches.open("ew-v2");
-    return !!(navigator.serviceWorker.controller && await c.match("clips/de-f.json") && await c.match("./"));
+    return !!(navigator.serviceWorker.controller && await c.match("clips/de-f.json") && await c.match("./")
+      && await c.match("sounds/waves.mp3"));
   });
   for (let t = Date.now(); !(await cached()); ) {
     if (Date.now() - t > 60000) throw new Error("Offline-Cache nicht befüllt");

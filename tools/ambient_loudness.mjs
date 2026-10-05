@@ -1,7 +1,9 @@
-// Misst die Hintergrundklänge: Lautheit (LUFS, ITU-R BS.1770 K-Gewichtung) bei gleichem RMS,
+// Misst die Hintergrundklänge (prozedural und Aufnahmen): Lautheit (LUFS, ITU-R BS.1770 K-Gewichtung) bei gleichem RMS,
 // Pegelschwankung (1-s-Fenster) und Rechenzeit. Ergebnis: Vorschlag für AMBIENT.trim.
 //   node tools/ambient_loudness.mjs [--wav DIR]   (WAV-Proben zum Anhören, 60 s)
-import { SOUNDS, bedScale } from "../web/js/ambient.js";
+import { SOUNDS, bedScale, makeLoop, loopFill } from "../web/js/ambient.js";
+import { AMBIENT } from "../web/js/config.js";
+import { execFileSync } from "node:child_process";
 import { createWav } from "../web/js/wav.js";
 import { writeFileSync, mkdirSync } from "node:fs";
 
@@ -28,11 +30,19 @@ function kWeight(x) {
 }
 const lufs = x => { const k = kWeight(x); let q = 0; for (const v of k) q += v * v; return -0.691 + 10 * Math.log10(q / k.length); };
 
+// Aufnahmen per ffmpeg dekodieren (wie im Browser: mono, dann Schleife mit Überblendung)
+function loopOf(url) {
+  const raw = execFileSync("ffmpeg", ["-v", "error", "-i", new URL(`../web/${url}`, import.meta.url).pathname,
+    "-ac", "1", "-ar", String(RATE), "-f", "f32le", "pipe:1"], { maxBuffer: 1 << 30 });
+  return makeLoop(new Float32Array(raw.buffer, raw.byteOffset, raw.length / 4), RATE);
+}
+
 const res = {};
-for (const kind of Object.keys(SOUNDS)) {
+for (const kind of AMBIENT.sounds.filter(k => k !== "off")) {
   const t0 = performance.now();
-  const sc = bedScale(kind, RATE);
-  const fill = SOUNDS[kind](RATE, Math.random), buf = new Float32Array(RATE);
+  const url = AMBIENT.files[kind], loop = url && loopOf(url);
+  const sc = loop ? loop.scale : bedScale(kind, RATE);
+  const fill = loop ? loopFill(loop, Math.random) : SOUNDS[kind](RATE, Math.random), buf = new Float32Array(RATE);
   const n = SECONDS * RATE, x = new Float64Array(n), g = Math.pow(10, -30 / 20) * sc;
   fill(buf);
   for (let s = 0; s < SECONDS; s++) { fill(buf); for (let j = 0; j < RATE; j++) x[s * RATE + j] = buf[j] * g; }

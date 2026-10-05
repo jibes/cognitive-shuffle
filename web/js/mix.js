@@ -1,15 +1,16 @@
 import { SESSION, AMBIENT, lerp } from "./config.js";
-import { SOUNDS, bedScale } from "./ambient.js";
+import { SOUNDS, bedScale, loopFill } from "./ambient.js";
 import { createWav } from "./wav.js";
 
 // Mischt eine ganze Sitzung in eine WAV: Hintergrundklang + Wörter an ihren Anfängen.
-// clips[i] gehört zu marks[i] (Float32Array, -1..1, in `rate`). sound = { kind, db } oder null.
+// clips[i] gehört zu marks[i] (Float32Array, -1..1, in `rate`).
+// sound = { kind, db, loop? } oder null; loop = makeLoop(...) in `rate` für Aufnahmen.
 // Kein DOM, testbar in Node.
 export function mixSession({ durationS, marks, clips, rate, sound, rng = Math.random, cfg = SESSION }) {
   const total = Math.ceil((cfg.lead + durationS + cfg.tail) * rate);
   const { buffer, pcm } = createWav(total, rate);
 
-  if (sound && sound.kind in SOUNDS) addBed(pcm, rate, sound, durationS, cfg, rng);
+  if (sound && (sound.loop || sound.kind in SOUNDS)) addBed(pcm, rate, sound, durationS, cfg, rng);
 
   marks.forEach((m, i) => {
     const x = clips[i], gain = 32767 * lerp(cfg.voice, m.p), s0 = Math.round(m.t * rate);
@@ -27,8 +28,9 @@ export const bedDb = ({ kind, db }) => db + (AMBIENT.trim[kind] || 0);
 
 // Einblenden im Vorlauf, quadratisch ausblenden im Nachlauf.
 function addBed(pcm, rate, sound, durationS, cfg, rng) {
-  const fill = SOUNDS[sound.kind](rate, rng), buf = new Float32Array(4096);
-  const g = 32767 * Math.pow(10, bedDb(sound) / 20) * bedScale(sound.kind, rate);
+  const { loop } = sound, buf = new Float32Array(4096);
+  const fill = loop ? loopFill(loop, rng) : SOUNDS[sound.kind](rate, rng);
+  const g = 32767 * Math.pow(10, bedDb(sound) / 20) * (loop ? loop.scale : bedScale(sound.kind, rate));
   const inEnd = cfg.lead * rate, outStart = (cfg.lead + durationS) * rate, outLen = cfg.tail * rate;
   for (let i = 0; i < rate; i += buf.length) fill(buf);  // Einschwingen
   for (let i0 = 0; i0 < pcm.length; i0 += buf.length) {

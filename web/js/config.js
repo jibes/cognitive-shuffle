@@ -20,9 +20,10 @@ export const DISPLAY = {
 
 export const AMBIENT = {
   sounds: ["off", "brown", "rain", "waves"],  // Reihenfolge im Umschalter; Klänge in ambient.js
+  files: { rain: "sounds/rain.mp3", waves: "sounds/waves.mp3" },  // Aufnahmen, in Schleife
   // Lautheitsausgleich in dB: gleiche Reglerstellung klingt bei jedem Klang etwa gleich laut
   // (gemessen in LUFS gegenüber braunem Rauschen, tools/ambient_loudness.mjs)
-  trim: { brown: 0, rain: -5.5, waves: -2 },
+  trim: { brown: 0, rain: -6, waves: -5.5 },
   level: { min: -55, max: -29, default: -43 },  // RMS in dBFS (Regler)
   default: "brown",
 };

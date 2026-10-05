@@ -83,3 +83,33 @@ function downsample(x, f) {
   }
   return y;
 }
+
+// Hintergrund-Aufnahmen (web/sounds/*.mp3): Rohdaten einmal laden, je Ausgaberate dekodieren.
+const files = new Map();     // url -> Promise<ArrayBuffer>
+const filePcm = new Map();   // url -> Promise<Float32Array> (in der Ausgaberate der Clips)
+
+export function loadFile(url) {
+  if (!files.has(url)) {
+    const p = fetch(url).then(r => {
+      if (!r.ok) throw new Error(`${url}: ${r.status}`);
+      return r.arrayBuffer();
+    });
+    p.catch(() => files.delete(url));
+    files.set(url, p);
+  }
+  return files.get(url);
+}
+
+// Wie pcm(): gleicher Dekoder und gleiche Rate wie die Clips von `set`.
+export function filePcmFor(set, url) {
+  if (!filePcm.has(url)) {
+    const p = Promise.all([loadBundle(set), loadFile(url)]).then(async ([bundle, raw]) => {
+      const d = await decoder(Object.values(bundle)[0]);
+      const x = (await decodeWith(d.ctx, raw.slice(0))).getChannelData(0);
+      return d.factor === 1 ? x : downsample(x, d.factor);
+    });
+    p.catch(() => filePcm.delete(url));
+    filePcm.set(url, p);
+  }
+  return filePcm.get(url);
+}

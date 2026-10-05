@@ -4,7 +4,8 @@ import { storage } from "./storage.js";
 import { onsets, maxWordsPerSession } from "./schedule.js";
 import { freshDeck, validDeck, draw } from "./deck.js";
 import { mixSession } from "./mix.js";
-import { loadBundle, outRate, pcm } from "./clips.js";
+import { loadBundle, outRate, pcm, loadFile, filePcmFor } from "./clips.js";
+import { makeLoop } from "./ambient.js";
 import { createStage } from "./stage.js";
 import { registerOffline, keepOffline } from "./offline.js";
 import { preview, stopPreview } from "./preview.js";
@@ -61,9 +62,21 @@ async function buildSession(minutes, set) {
   const all = Object.keys(bundle);
   const { words, deck } = draw(loadDeck(all), all, marks.length);
   marks.forEach((m, i) => { m.w = words[i]; });
-  const [rate, clips] = await Promise.all([outRate(set), Promise.all(words.map(w => pcm(set, w)))]);
-  const wav = mixSession({ durationS, marks, clips, rate, sound: soundSetting() });
+  const bed = soundSetting();
+  const [rate, clips, loop] = await Promise.all([
+    outRate(set), Promise.all(words.map(w => pcm(set, w))), bed && bedLoop(set, bed.kind)]);
+  const wav = mixSession({ durationS, marks, clips, rate, sound: bed && { ...bed, loop } });
   return { url: URL.createObjectURL(new Blob([wav], { type: "audio/wav" })), marks, deck };
+}
+
+// Aufnahme als Schleife in der Rate der Clips (null für prozedurale Klänge).
+const loops = new Map();
+async function bedLoop(set, kind) {
+  const url = AMBIENT.files[kind];
+  if (!url) return null;
+  const rate = await outRate(set), key = url + "@" + rate;
+  if (!loops.has(key)) loops.set(key, makeLoop(await filePcmFor(set, url), rate));
+  return loops.get(key);
 }
 
 // Dekodiert schon vorab die Wörter der längsten Sitzung, damit der Tap schnell ist.
@@ -83,7 +96,14 @@ async function prewarm(set) {
 function prepare() {
   const set = clipSet();
   prewarm(set);
-  loadBundle(set).then(() => keepOffline(set), () => {});
+  loadBundle(set).then(() => keepOffline(`clips/${set}.json`), () => {});
+  prepareSound();
+}
+
+// Lädt die Aufnahme des gewählten Hintergrunds vor und legt sie offline ab.
+function prepareSound() {
+  const url = AMBIENT.files[sound];
+  if (url) loadFile(url).then(() => keepOffline(url), () => {});
 }
 
 async function start(minutes) {
@@ -175,6 +195,7 @@ function renderSounds() {
         sound = kind;
         storage.set(KEYS.sound, sound);
         renderSounds();
+        prepareSound();
         preview({ kind: sound, db: level });
       });
       ui.sounds.appendChild(b);

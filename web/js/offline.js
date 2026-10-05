@@ -1,5 +1,5 @@
 // Registriert den Service Worker und sorgt dafür, dass die Clips der gewählten
-// Stimme im Offline-Cache liegen – auch beim allerersten Besuch, bei dem die
+// Stimme und die Aufnahme des gewählten Hintergrunds im Offline-Cache liegen – auch beim allerersten Besuch, bei dem die
 // Seite noch nicht vom Service Worker kontrolliert wurde.
 
 const CACHE = "ew-v2";  // wie in sw.js
@@ -14,12 +14,11 @@ export function registerOffline() {
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 }
 
-export async function keepOffline(set) {
+export async function keepOffline(url) {
   if (!ready) return;
   try {
     await ready;
     const cache = await caches.open(CACHE);
-    const url = `clips/${set}.json`;
     if (!(await cache.match(url))) await cache.add(url);  // meist aus dem HTTP-Cache, kein zweiter Download
   } catch (e) { /* offline nicht verfügbar – online geht es weiter */ }
 }

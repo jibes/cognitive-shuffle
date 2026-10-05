@@ -2,7 +2,8 @@
 //
 // App-Hülle (HTML/JS/CSS/Icons): Netz zuerst mit Zeitlimit, sonst Cache –
 //   online gibt es immer die neueste Fassung, offline die zuletzt gesehene.
-// Clips (clips/*.json) und Schriften: Cache zuerst, im Hintergrund nachladen.
+// Clips (clips/*.json), Hintergrund-Aufnahmen (sounds/*.mp3) und Schriften: Cache zuerst,
+//   im Hintergrund nachladen.
 
 const CACHE = "ew-v2";  // neu bei geändertem Clip-Schema: alte Caches fliegen raus
 const NETWORK_TIMEOUT_MS = 3000;
@@ -57,7 +58,7 @@ self.addEventListener("fetch", event => {
   const fonts = url.hostname === "fonts.googleapis.com" || url.hostname === "fonts.gstatic.com";
   if (url.origin !== location.origin && !fonts) return;
 
-  if (fonts || url.pathname.includes("/clips/")) {
+  if (fonts || url.pathname.includes("/clips/") || url.pathname.includes("/sounds/")) {
     event.respondWith(cacheFirst(event, req));
   } else {
     event.respondWith(networkFirst(req));
