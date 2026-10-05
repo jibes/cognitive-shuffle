@@ -15,9 +15,12 @@ const $ = id => document.getElementById(id);
 const ui = {
   start: $("start"), stage: $("stage"), status: $("status"), lang: $("lang"),
   hold: $("hold"), holdRing: $("hold-ring"), holdHint: $("hold-hint"), panel: $("panel"),
-  left: $("left-n"), panelStatus: $("panel-status"),
+  left: $("left-n"), panelStatus: $("panel-status"), panelNote: $("panel-note"),
 };
-const stage = createStage({ audio: $("player"), word: $("word"), tapHint: $("tapplay") });
+const stage = createStage({
+  audio: $("player"), word: $("word"), tapHint: $("tapplay"),
+  onInterrupt: () => interrupt(), onResume: () => uninterrupt(),
+});
 
 // Phasen: start -> building -> playing -> night -> done (-> start)
 // Während „playing“ ist das Bedienfeld gesperrt, bis man gedrückt hält.
@@ -170,7 +173,7 @@ function changeSound(immediate) {
 
 function renderLeft() {
   if (!session) return;
-  const left = SESSION.lead + session.durationS - stage.time;
+  const left = Math.min(session.durationS, SESSION.lead + session.durationS - stage.time);  // Vorlauf zählt nicht
   ui.left.textContent = String(Math.max(0, Math.ceil(left / 60)));
 }
 
@@ -202,6 +205,7 @@ function prepareSound() {
 }
 
 function endSession() {
+  uninterrupt();
   lockPanel();
   session = null;
   stage.stop();
@@ -352,6 +356,26 @@ function holdUp() {
   if (stage.paused && phase === "playing") stage.resume();  // Wiedergabe war blockiert
 }
 
+// Unterbrochen (Anruf, andere App, Pause am Sperrbildschirm): Bedienfeld offen und
+// ohne Zeitsperre, Hinweis oben; „Weiter“ setzt fort (im Tap – iOS verlangt das).
+let interrupted = false;
+function interrupt() {
+  if (phase !== "playing" || interrupted) return;
+  interrupted = true;
+  holdStart = 0;
+  ui.hold.hidden = true;
+  if (ui.panel.hidden) openPanel();
+  clearTimeout(relockTimer);
+  ui.panelNote.textContent = TEXT[lang].interrupted;
+  ui.panelNote.hidden = false;
+}
+function uninterrupt() {
+  if (!interrupted) return;
+  interrupted = false;
+  ui.panelNote.hidden = true;
+  if (!ui.panel.hidden) touchPanel();
+}
+
 let leftTimer = 0;
 function openPanel() {
   if (navigator.vibrate) navigator.vibrate(15);
@@ -372,7 +396,7 @@ function lockPanel() {
 }
 function touchPanel() {
   clearTimeout(relockTimer);
-  relockTimer = setTimeout(lockPanel, CONTROLS.relockMs);
+  if (!interrupted) relockTimer = setTimeout(lockPanel, CONTROLS.relockMs);
 }
 
 function showHoldHint() {
@@ -394,11 +418,15 @@ ui.stage.addEventListener("click", e => {
 ui.stage.addEventListener("contextmenu", e => e.preventDefault());
 document.querySelectorAll("[data-adj]").forEach(b =>
   b.addEventListener("click", () => changeDuration(Number(b.dataset.adj))));
-$("resume").addEventListener("click", lockPanel);
+$("resume").addEventListener("click", () => {
+  if (interrupted || stage.paused) stage.resume();
+  lockPanel();
+});
 $("end").addEventListener("click", endSession);
 
 $("player").addEventListener("ended", () => {
   if (phase !== "playing") return;
+  uninterrupt();
   lockPanel();
   session = null;
   phase = "night";

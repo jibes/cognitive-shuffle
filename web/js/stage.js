@@ -9,9 +9,12 @@ import { createWav } from "./wav.js";
 // 0,1 s Stille – zum Freischalten unter iOS noch im Tap
 const SILENT_WAV = URL.createObjectURL(new Blob([createWav(800, 8000).buffer], { type: "audio/wav" }));
 
-export function createStage({ audio, word, tapHint }) {
+// onInterrupt: Wiedergabe angehalten, ohne dass die App es wollte (Anruf, andere App übernimmt
+// den Ton, Pause am Sperrbildschirm). onResume: läuft wieder.
+export function createStage({ audio, word, tapHint, onInterrupt = () => {}, onResume = () => {} }) {
   let marks = null, offset = 0, idx = -1, rafId = 0, lastOpacity = "", hidden = false;
   let pendingSwap = null;
+  let switching = false;  // Quelle wird gewechselt: Pausen dabei sind gewollt
 
   const now = () => offset + audio.currentTime;
 
@@ -51,15 +54,17 @@ export function createStage({ audio, word, tapHint }) {
     marks = s.marks;
     offset = s.offset;
     idx = -1;
+    switching = true;
     audio.src = s.url;
-    const fail = () => { audio.removeEventListener("loadedmetadata", seek); s.done(); };  // nie hängen bleiben
+    const fail = () => { audio.removeEventListener("loadedmetadata", seek); switching = false; s.done(); };  // nie hängen bleiben
     const seek = () => {
       audio.removeEventListener("loadedmetadata", seek);
       audio.removeEventListener("error", fail);
       audio.currentTime = at;
       const p = audio.play();
       api.frames();
-      Promise.resolve(p).then(() => { tapHint.hidden = true; }, () => { tapHint.hidden = false; }).then(s.done);
+      Promise.resolve(p).then(() => { tapHint.hidden = true; }, () => { tapHint.hidden = false; })
+        .then(() => { switching = false; s.done(); });
     };
     audio.addEventListener("loadedmetadata", seek);
     audio.addEventListener("error", fail, { once: true });
@@ -79,6 +84,7 @@ export function createStage({ audio, word, tapHint }) {
       marks = sessionMarks;
       offset = 0;
       idx = -1;
+      switching = true;
       audio.src = url;
       if ("mediaSession" in navigator && typeof MediaMetadata !== "undefined") {
         navigator.mediaSession.metadata = new MediaMetadata(meta);
@@ -98,7 +104,8 @@ export function createStage({ audio, word, tapHint }) {
 
     resume() {
       const p = audio.play();
-      if (p && p.then) p.then(() => { tapHint.hidden = true; }, () => { tapHint.hidden = false; });
+      Promise.resolve(p).then(() => { tapHint.hidden = true; }, () => { tapHint.hidden = false; })
+        .then(() => { switching = false; });
       api.frames();
     },
 
@@ -138,5 +145,8 @@ export function createStage({ audio, word, tapHint }) {
   };
 
   audio.addEventListener("play", api.frames);
+  // Beim Ende feuert „pause“ kurz vor „ended“ – das ist keine Unterbrechung.
+  audio.addEventListener("pause", () => { if (marks && !switching && !audio.ended) onInterrupt(); });
+  audio.addEventListener("playing", () => { if (marks) onResume(); });
   return api;
 }

@@ -179,6 +179,7 @@ for (const [locale, title, heading] of [["de-DE", "Einschlafwörter", "So geht�
   const d15 = await p.$eval("#player", a => a.currentTime + a.duration);
   check(await p.textContent("#left-n") === "15" && Math.abs(d15 - (2 + 900 + 30)) < 3,
     `+5: Restzeit 15, Sitzung endet bei ${d15.toFixed(0)} s`);
+  check(await p.$eval("#panel-note", e => e.hidden), "+5: Umschalten gilt nicht als Unterbrechung");
   await p.click('[data-adj="-5"]');
   await p.click('[data-adj="-5"]');
   await swapped();
@@ -192,6 +193,32 @@ for (const [locale, title, heading] of [["de-DE", "Einschlafwörter", "So geht�
   await hold(1500);
   await p.click("#end");
   check(!(await p.$eval("#start", e => e.hidden)) && await p.$eval("#player", a => a.paused), "Beenden: zurück zur Startseite, Ton aus");
+  await p.context().close();
+}
+
+// Unterbrechung (Anruf, andere App): Bedienfeld öffnet mit Hinweis, Weiter setzt fort
+{
+  const p = await page("de-DE");
+  await p.click('#wheel [data-min="10"]');
+  await p.click("#go");
+  await p.waitForFunction(() => document.getElementById("player").duration > 100, null, { timeout: 60000 });
+  await p.waitForTimeout(1500);
+  await p.$eval("#player", a => a.pause());  // wie das System bei einem Anruf
+  await p.waitForTimeout(300);
+  check(!(await p.$eval("#panel", e => e.hidden)) && !(await p.$eval("#panel-note", e => e.hidden)),
+    "Unterbrechung: Bedienfeld mit Hinweis offen");
+  await p.waitForTimeout(13000);
+  check(!(await p.$eval("#panel", e => e.hidden)), "Unterbrechung: Bedienfeld sperrt sich nicht von selbst");
+  const t0 = await p.$eval("#player", a => a.currentTime);
+  await p.click("#resume");
+  await p.waitForTimeout(1200);
+  const t1 = await p.$eval("#player", a => a.currentTime);
+  check(t1 > t0 + 0.5 && await p.$eval("#panel", e => e.hidden) && await p.$eval("#panel-note", e => e.hidden),
+    `Unterbrechung: Weiter setzt fort (${t0.toFixed(1)} → ${t1.toFixed(1)} s)`);
+  await p.$eval("#player", a => { a.currentTime = a.duration - 0.5; });
+  await p.waitForTimeout(3000);
+  check(await p.$eval("#panel", e => e.hidden) && await p.textContent("#word") === "Gute Nacht",
+    "Unterbrechung: Ende der Sitzung zählt nicht als Unterbrechung");
   await p.context().close();
 }
 
