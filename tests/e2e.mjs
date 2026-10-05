@@ -224,6 +224,7 @@ for (const [locale, title, heading] of [["de-DE", "Einschlafwörter", "So geht�
   await p.click('#wheel [data-min="30"]');
   await p.waitForTimeout(800);
   check(await v() === 30, "Rad Desktop: Klick nach dem Ziehen");
+  check(await p.$eval("#wheel", e => e.scrollHeight <= e.clientHeight), "Rad: kein senkrechter Überstand (scrollt nur waagrecht)");
   await ctx.close();
 }
 

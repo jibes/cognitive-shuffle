@@ -227,6 +227,8 @@ input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 2px va
 .wheel {
   --item: 64px;
   overflow-x: auto;
+  overflow-y: hidden;     /* nur waagrecht: die vergrößerte Zahl ließ es sonst senkrecht scrollen */
+  touch-action: pan-x;    /* senkrechtes Wischen scrollt die Seite, nicht das Rad */
   scroll-snap-type: x mandatory;
   scrollbar-width: none;
   overscroll-behavior-x: contain;
@@ -242,7 +244,7 @@ input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 2px va
 .wheel .track {
   display: flex;
   width: max-content;
-  padding: 0 calc(50% - var(--item) / 2);
+  padding: 8px calc(50% - var(--item) / 2);  /* oben/unten Platz für die vergrößerte Zahl */
 }
 .wheel .item {
   width: var(--item);
@@ -253,10 +255,10 @@ input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 2px va
   line-height: 52px;
   color: var(--muted);
   cursor: pointer;
-  transition: color .15s, transform .15s;
+  transition: color .15s, font-size .15s;
 }
-.wheel .item.on { color: var(--text); transform: scale(1.45); }
-.times .unit { text-align: center; font-size: .95rem; color: var(--muted); margin: -6px 0 10px; }
+.wheel .item.on { color: var(--text); font-size: 2.15rem; }  /* Schriftgröße statt scale(): kein Überstand, nichts scrollt senkrecht */
+.times .unit { text-align: center; font-size: .95rem; color: var(--muted); margin: -14px 0 10px; }
 .go {
   min-height: 56px;
   width: 100%;
