@@ -222,6 +222,19 @@ for (const [locale, title, heading] of [["de-DE", "Einschlafwörter", "So geht�
   await ctx.close();
 }
 
+// Lange Sitzung: „Wird vorbereitet …“, bis sie spielt
+{
+  const p = await page("de-DE");
+  await p.click('#wheel [data-min="120"]');
+  const t0 = Date.now();
+  await p.click("#go");
+  const shown = await p.waitForSelector("#building:not([hidden])", { timeout: 5000, state: "attached" }).then(() => true, () => false);
+  await p.waitForFunction(() => document.getElementById("player").duration > 7000, null, { timeout: 120000 });
+  check(shown && await p.$eval("#building", e => e.hidden),
+    `120 min: Hinweis beim Vorbereiten, dann weg (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
+  await p.context().close();
+}
+
 // Unterbrechung (Anruf, andere App): Bedienfeld öffnet mit Hinweis, Weiter setzt fort
 {
   const p = await page("de-DE");
@@ -241,6 +254,23 @@ for (const [locale, title, heading] of [["de-DE", "Einschlafwörter", "So geht�
   const t1 = await p.$eval("#player", a => a.currentTime);
   check(t1 > t0 + 0.5 && await p.$eval("#panel", e => e.hidden) && await p.$eval("#panel-note", e => e.hidden),
     `Unterbrechung: Weiter setzt fort (${t0.toFixed(1)} → ${t1.toFixed(1)} s)`);
+  // Änderung während der Unterbrechung: bleibt angehalten, bis „Weiter“
+  await p.$eval("#player", a => a.pause());
+  await p.waitForTimeout(300);
+  await p.click('[data-adj="5"]');
+  await p.waitForFunction(() => document.getElementById("panel-status").textContent === "", null, { timeout: 30000 });
+  await p.waitForTimeout(500);
+  check(await p.$eval("#player", a => a.paused) && !(await p.$eval("#panel-note", e => e.hidden))
+    && await p.textContent("#left-n") === "15", "Unterbrechung: +5 mischt neu, bleibt aber angehalten");
+  await p.click("#resume");
+  await p.waitForTimeout(800);
+  check(!(await p.$eval("#player", a => a.paused)), "Unterbrechung: Weiter nach Änderung spielt");
+  // Tastatur: Leertaste öffnet, Esc schließt
+  await p.keyboard.press(" ");
+  check(!(await p.$eval("#panel", e => e.hidden)) && await p.evaluate(() => document.activeElement.id) === "resume",
+    "Tastatur: Leertaste öffnet Bedienfeld, Fokus auf Weiter");
+  await p.keyboard.press("Escape");
+  check(await p.$eval("#panel", e => e.hidden), "Tastatur: Esc schließt Bedienfeld");
   await p.$eval("#player", a => { a.currentTime = a.duration - 0.5; });
   await p.waitForTimeout(3000);
   check(await p.$eval("#panel", e => e.hidden) && await p.textContent("#word") === "Gute Nacht",

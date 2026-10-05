@@ -61,6 +61,7 @@ export function createStage({ audio, word, tapHint, onInterrupt = () => {}, onRe
       audio.removeEventListener("loadedmetadata", seek);
       audio.removeEventListener("error", fail);
       audio.currentTime = at;
+      if (!s.play) { switching = false; api.frames(); s.done(); return; }
       const p = audio.play();
       api.frames();
       Promise.resolve(p).then(() => { tapHint.hidden = true; }, () => { tapHint.hidden = false; })
@@ -93,11 +94,12 @@ export function createStage({ audio, word, tapHint, onInterrupt = () => {}, onRe
     },
 
     // Neues Stück ab Sitzungszeit `from`; umgeschaltet wird, sobald gerade kein Wort klingt.
+    // Ist die Wiedergabe angehalten (Unterbrechung), sofort umschalten und angehalten bleiben.
     swap(url, sessionMarks, from) {
       return new Promise(done => {
         if (pendingSwap) { release(pendingSwap.url); pendingSwap.done(); }
-        pendingSwap = { url, marks: sessionMarks, offset: from, done };
-        if (marks && quiet(now())) swapNow(now());
+        pendingSwap = { url, marks: sessionMarks, offset: from, done, play: !audio.paused };
+        if (marks && (!pendingSwap.play || quiet(now()))) swapNow(now());
         api.frames();
       });
     },

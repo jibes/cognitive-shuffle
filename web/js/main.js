@@ -3,7 +3,7 @@ import { TEXT, LANGS, pickLang } from "./i18n.js";
 import { storage } from "./storage.js";
 import { onsets, replan } from "./schedule.js";
 import { freshDeck, validDeck, draw } from "./deck.js";
-import { mixSession } from "./mix.js";
+import { mixSessionAsync } from "./mix.js";
 import { loadBundle, outRate, pcm, loadFile, filePcmFor } from "./clips.js";
 import { makeLoop } from "./ambient.js";
 import { createStage } from "./stage.js";
@@ -15,7 +15,7 @@ const $ = id => document.getElementById(id);
 const ui = {
   start: $("start"), stage: $("stage"), status: $("status"), lang: $("lang"),
   hold: $("hold"), holdRing: $("hold-ring"), holdHint: $("hold-hint"), panel: $("panel"),
-  left: $("left-n"), panelStatus: $("panel-status"), panelNote: $("panel-note"),
+  left: $("left-n"), panelStatus: $("panel-status"), panelNote: $("panel-note"), building: $("building"),
 };
 const stage = createStage({
   audio: $("player"), word: $("word"), tapHint: $("tapplay"),
@@ -90,13 +90,17 @@ async function fillWords(s) {
   storage.setJSON(KEYS.deck(s.lang), deck);
 }
 
-// WAV-URL der Sitzung ab Sitzungszeit fromS
-async function mix(s, fromS) {
+// WAV-URL der Sitzung ab Sitzungszeit fromS; progress(0..1) über Dekodieren und Mischen
+async function mix(s, fromS, progress = () => {}) {
   const [rate, loop] = await Promise.all([outRate(s.set), s.sound && bedLoop(s.set, s.sound.kind)]);
   const marks = s.marks.filter(m => m.t + SESSION.maxClip > fromS);
-  const clips = await Promise.all(marks.map(m => pcm(s.set, m.w)));
-  const blob = mixSession({ durationS: s.durationS, marks, clips, rate, seed: s.seed, fromS,
-    sound: s.sound && { ...s.sound, loop } });
+  let decoded = 0;
+  const clips = await Promise.all(marks.map(m => pcm(s.set, m.w).then(x => {
+    progress(0.5 * ++decoded / marks.length);
+    return x;
+  })));
+  const blob = await mixSessionAsync({ durationS: s.durationS, marks, clips, rate, seed: s.seed, fromS,
+    sound: s.sound && { ...s.sound, loop } }, f => progress(0.5 + 0.5 * f));
   return URL.createObjectURL(blob.slice(0, blob.size, "audio/wav"));
 }
 
@@ -108,18 +112,25 @@ async function start() {
   ui.start.hidden = true;
   ui.stage.hidden = false;
   showHoldHint();
+  // Hinweis mit Fortschritt; sichtbar erst nach 0,4 s (CSS), kurze Vorbereitung bleibt ruhig
+  ui.building.textContent = TEXT[lang].preparing;
+  ui.building.hidden = false;
   const set = clipSet();
   try {
     const all = Object.keys(await loadBundle(set));
     const s = { set, lang, durationS: minutes * 60, marks: onsets(minutes * 60),
       deck: loadDeck(all), seed: (Math.random() * 2 ** 31) | 0, sound: soundSetting() };
     await fillWords(s);
-    const url = await mix(s, 0);
+    const url = await mix(s, 0, f => {
+      ui.building.textContent = `${TEXT[s.lang].preparing} ${Math.round(100 * f)} %`;
+    });
+    ui.building.hidden = true;
     if (phase !== "building") { URL.revokeObjectURL(url); return; }
     session = s;
     phase = "playing";
     stage.play(url, s.marks, { title: TEXT[s.lang].title, artist: TEXT[s.lang].artist });
   } catch (e) {
+    ui.building.hidden = true;
     stage.stop();
     showStart(TEXT[lang].fail);
   }
@@ -377,7 +388,7 @@ function uninterrupt() {
 }
 
 let leftTimer = 0;
-function openPanel() {
+function openPanel(focus = false) {
   if (navigator.vibrate) navigator.vibrate(15);
   stage.hideWord = true;
   ui.panel.hidden = false;
@@ -386,8 +397,11 @@ function openPanel() {
   renderLeft();
   leftTimer = setInterval(renderLeft, 5000);
   touchPanel();
+  if (focus) $("resume").focus();
 }
 function lockPanel() {
+  const hadFocus = ui.panel.contains(document.activeElement);
+  if (hadFocus) ui.stage.focus();
   clearTimeout(relockTimer);
   clearInterval(leftTimer);
   ui.panel.hidden = true;
@@ -416,6 +430,11 @@ ui.stage.addEventListener("click", e => {
   if (phase === "done" && !ui.panel.contains(e.target)) showStart();
 });
 ui.stage.addEventListener("contextmenu", e => e.preventDefault());
+// Tastatur: Leertaste oder Enter öffnet das Bedienfeld (Esc schließt es)
+document.addEventListener("keydown", e => {
+  if (phase !== "playing" || !ui.panel.hidden || e.repeat) return;
+  if (e.key === " " || e.key === "Enter") { e.preventDefault(); openPanel(true); }
+});
 document.querySelectorAll("[data-adj]").forEach(b =>
   b.addEventListener("click", () => changeDuration(Number(b.dataset.adj))));
 $("resume").addEventListener("click", () => {

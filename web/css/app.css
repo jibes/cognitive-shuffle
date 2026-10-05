@@ -262,6 +262,18 @@ input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 2px va
 }
 #word.night { transition: opacity 2.5s ease-in-out; }
 #stage.unlocked { cursor: auto; }
+#stage:focus { outline: none; }
+
+/* Während die Sitzung gemischt wird (lange Sitzungen auf dem Handy: einige Sekunden) */
+.building {
+  position: absolute;
+  margin: 0;
+  font-size: 1.15rem;
+  color: var(--muted);
+  opacity: 0;  /* kurze Vorbereitung: nichts zu sehen */
+  animation: breathe 2.4s ease-in-out .4s infinite;
+}
+@keyframes breathe { 0%, 100% { opacity: .25; } 50% { opacity: .8; } }
 
 /* Hinweis zu Beginn, verblasst */
 .hold-hint {

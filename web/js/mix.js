@@ -12,7 +12,35 @@ import { wavHeader } from "./wav.js";
 //   fromS: Blob beginnt erst bei dieser Sitzungszeit (Neumischen ab der aktuellen Stelle)
 const CHUNK_S = 30;
 
-export function mixSession({ durationS, marks, clips, rate, sound, seed = 1, fromS = 0, cfg = SESSION }) {
+export function mixSession(opts) {
+  const it = mixChunks(opts);
+  let r;
+  while (!(r = it.next()).done);
+  return r.value;
+}
+
+// Wie mixSession, gibt aber nach jedem Stück an den Browser ab (Oberfläche bleibt bedienbar);
+// progress(0..1) nach jedem Stück. Abgeben per MessageChannel: setTimeout wird bei gesperrtem
+// Bildschirm auf ≥ 1 s gedrosselt (120 min = 240 Stücke).
+export async function mixSessionAsync(opts, progress = () => {}) {
+  const it = mixChunks(opts);
+  for (let r = it.next(); ; r = it.next()) {
+    if (r.done) return r.value;
+    progress(r.value);
+    await yieldToBrowser();
+  }
+}
+
+function yieldToBrowser() {
+  if (typeof MessageChannel === "undefined") return new Promise(res => setTimeout(res, 0));
+  return new Promise(res => {
+    const { port1, port2 } = new MessageChannel();
+    port1.onmessage = () => { port1.close(); res(); };
+    port2.postMessage(0);
+  });
+}
+
+function* mixChunks({ durationS, marks, clips, rate, sound, seed = 1, fromS = 0, cfg = SESSION }) {
   const total = Math.ceil((cfg.lead + durationS + cfg.tail) * rate);
   const first = Math.min(total, Math.round(fromS * rate));
   const bed = sound && (sound.loop || sound.kind in SOUNDS) ? bedSource(sound, rate, seed, first, durationS, cfg) : null;
@@ -32,6 +60,7 @@ export function mixSession({ durationS, marks, clips, rate, sound, seed = 1, fro
       }
     }
     blob = new Blob([blob, pcm]);  // verweist auf den bisherigen Blob, kopiert nur das Stück
+    yield (a + n - first) / (total - first);
   }
   return blob;
 }
