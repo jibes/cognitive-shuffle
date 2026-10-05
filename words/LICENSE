@@ -1,0 +1,12 @@
+Wortlisten und Oberflächentexte / Word lists and user-facing texts
+
+Copyright (c) 2026 Sebastian Bruenecke
+
+Gilt für / Applies to: words/*.txt, web/js/i18n.js (Texte / texts),
+Info-Dialog in web/index.html (Texte / texts).
+
+Lizenz / License: Creative Commons Attribution 4.0 International (CC BY 4.0)
+https://creativecommons.org/licenses/by/4.0/
+
+Namensnennung / Attribution: „Einschlafwörter / Sleep Words – Sebastian
+Bruenecke – https://github.com/jibes/cognitive-shuffle“
