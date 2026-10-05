@@ -18,10 +18,13 @@ export const DISPLAY = {
   skipLead: 0.3,        // s vor dem nächsten Wortanfang landen
 };
 
-export const NOISE = {
-  levels: { off: null, soft: -43, medium: -35 },  // RMS in dBFS
-  default: "soft",
-  corner: 40,           // Hz, braunes Rauschen (1/f²) oberhalb
+export const AMBIENT = {
+  sounds: ["off", "brown", "rain", "waves"],  // Reihenfolge im Umschalter; Klänge in ambient.js
+  // Lautheitsausgleich in dB: gleiche Reglerstellung klingt bei jedem Klang etwa gleich laut
+  // (gemessen in LUFS gegenüber braunem Rauschen, tools/ambient_loudness.mjs)
+  trim: { brown: 0, rain: -5.5, waves: -2 },
+  level: { min: -55, max: -29, default: -43 },  // RMS in dBFS (Regler)
+  default: "brown",
 };
 
 export const AUDIO = {

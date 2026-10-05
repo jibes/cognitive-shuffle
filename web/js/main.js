@@ -1,4 +1,4 @@
-import { NOISE, LONG_PRESS_MS } from "./config.js";
+import { AMBIENT, LONG_PRESS_MS } from "./config.js";
 import { TEXT, LANGS, pickLang } from "./i18n.js";
 import { storage } from "./storage.js";
 import { onsets, maxWordsPerSession } from "./schedule.js";
@@ -7,9 +7,13 @@ import { mixSession } from "./mix.js";
 import { loadBundle, outRate, pcm } from "./clips.js";
 import { createStage } from "./stage.js";
 import { registerOffline, keepOffline } from "./offline.js";
+import { preview, stopPreview } from "./preview.js";
 
 const $ = id => document.getElementById(id);
-const ui = { start: $("start"), stage: $("stage"), status: $("status"), lang: $("lang") };
+const ui = {
+  start: $("start"), stage: $("stage"), status: $("status"), lang: $("lang"),
+  sounds: $("sounds"), level: $("level"), levelField: $("level-field"),
+};
 const stage = createStage({ audio: $("player"), word: $("word"), tapHint: $("tapplay") });
 
 // Phasen: start -> building -> playing -> night -> done (-> start)
@@ -21,17 +25,28 @@ const clipSet = () => `${lang}-${voice}`;  // web/clips/<set>.json, nur die gew�
 const KEYS = {
   lang: "ew-lang",
   voice: "ew-voice",
-  noise: "ew-noise",
+  sound: "ew-sound",
+  level: "ew-level",
+  legacyNoise: "ew-noise",
   deck: l => (l === "de" ? "ew-deck" : `ew-deck-${l}`),
 };
-const LEGACY_NOISE = { aus: "off", leise: "soft", mittel: "medium" };
+// Früher ein Regler für beides: aus/leise/mittel (braunes Rauschen bei -43/-35 dBFS)
+const LEGACY_NOISE = {
+  off: ["off", null], aus: ["off", null], soft: ["brown", -43], leise: ["brown", -43],
+  medium: ["brown", -35], mittel: ["brown", -35],
+};
 
-let noise = storage.get(KEYS.noise);
-noise = LEGACY_NOISE[noise] || noise;
-if (!(noise in NOISE.levels)) noise = NOISE.default;
+const { min: LEVEL_MIN, max: LEVEL_MAX } = AMBIENT.level;
+let sound = storage.get(KEYS.sound);
+let level = Number(storage.get(KEYS.level));
+const legacy = LEGACY_NOISE[storage.get(KEYS.legacyNoise)];
+if (!sound && legacy) [sound, level] = [legacy[0], legacy[1] ?? AMBIENT.level.default];
+if (!AMBIENT.sounds.includes(sound)) sound = AMBIENT.default;
+if (!(level >= LEVEL_MIN && level <= LEVEL_MAX)) level = AMBIENT.level.default;
 const VOICES = ["f", "m"];
 let voice = storage.get(KEYS.voice);
 if (!VOICES.includes(voice)) voice = VOICES[0];
+const soundSetting = () => (sound === "off" ? null : { kind: sound, db: level });
 
 function loadDeck(words) {
   const d = storage.getJSON(KEYS.deck(lang));
@@ -47,7 +62,7 @@ async function buildSession(minutes, set) {
   const { words, deck } = draw(loadDeck(all), all, marks.length);
   marks.forEach((m, i) => { m.w = words[i]; });
   const [rate, clips] = await Promise.all([outRate(set), Promise.all(words.map(w => pcm(set, w)))]);
-  const wav = mixSession({ durationS, marks, clips, rate, noiseDb: NOISE.levels[noise] });
+  const wav = mixSession({ durationS, marks, clips, rate, sound: soundSetting() });
   return { url: URL.createObjectURL(new Blob([wav], { type: "audio/wav" })), marks, deck };
 }
 
@@ -74,6 +89,7 @@ function prepare() {
 async function start(minutes) {
   if (phase !== "start") return;
   phase = "building";
+  stopPreview();
   stage.unlock();  // iOS: noch im Tap
   ui.start.hidden = true;
   ui.stage.hidden = false;
@@ -110,24 +126,22 @@ function setLang(code, remember) {
   document.querySelectorAll("[data-t]").forEach(el => { el.textContent = t[el.dataset.t]; });
   document.querySelectorAll("[data-t-label]").forEach(el => { el.setAttribute("aria-label", t[el.dataset.tLabel]); });
   document.querySelectorAll("[data-lang-block]").forEach(el => { el.hidden = el.dataset.langBlock !== code; });
-  ui.lang.querySelectorAll("button").forEach(b =>
-    b.setAttribute("aria-checked", String(b.dataset.lang === code)));
+  ui.lang.value = code;
+  renderSounds();
   ui.status.textContent = "";
   prepare();
 }
 
 function renderLangSwitch() {
-  ui.lang.hidden = LANGS.length < 2;
+  ui.lang.closest(".lang").hidden = LANGS.length < 2;
   for (const code of LANGS) {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.setAttribute("role", "radio");
-    b.dataset.lang = code;
-    b.lang = code;
-    b.textContent = TEXT[code].name;
-    b.addEventListener("click", () => { if (code !== lang) setLang(code, true); });
-    ui.lang.appendChild(b);
+    const o = document.createElement("option");
+    o.value = code;
+    o.lang = code;
+    o.textContent = TEXT[code].name;
+    ui.lang.appendChild(o);
   }
+  ui.lang.addEventListener("change", () => { if (ui.lang.value !== lang) setLang(ui.lang.value, true); });
 }
 
 // ---------- Bedienung ----------
@@ -142,15 +156,46 @@ document.querySelectorAll("[data-voice]").forEach(b => b.addEventListener("click
   renderVoice();
   prepare();
 }));
-function renderNoise() {
-  document.querySelectorAll("[data-noise]").forEach(b =>
-    b.setAttribute("aria-checked", String(b.dataset.noise === noise)));
+// Hintergrund: Klang und Lautstärke getrennt; Knöpfe aus AMBIENT.sounds, Texte sound_<name>
+const SOUND_ICONS = {
+  off: '<path d="M5 12h14" stroke-linecap="round"/>',
+  brown: '<path d="M3 12h2l1.5-4 2 9 2-11 2 12 2-9 1.5 5 1-2h3" stroke-linecap="round" stroke-linejoin="round"/>',
+  rain: '<path d="M7 4l-2 5M13 4l-2 5M19 4l-2 5M10 12l-2 5M16 12l-2 5M7 17l-1 3M13 17l-1 3" stroke-linecap="round"/>',
+  waves: '<path d="M2 10c2.5 0 2.5-3 5-3s2.5 3 5 3 2.5-3 5-3 2.5 3 5 3M2 16c2.5 0 2.5-3 5-3s2.5 3 5 3 2.5-3 5-3 2.5 3 5 3" stroke-linecap="round"/>',
+};
+function renderSounds() {
+  if (!ui.sounds.children.length) {
+    for (const kind of AMBIENT.sounds) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.setAttribute("role", "radio");
+      b.dataset.sound = kind;
+      b.innerHTML = `<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4">${SOUND_ICONS[kind] || ""}</svg><span></span>`;
+      b.addEventListener("click", () => {
+        sound = kind;
+        storage.set(KEYS.sound, sound);
+        renderSounds();
+        preview({ kind: sound, db: level });
+      });
+      ui.sounds.appendChild(b);
+    }
+  }
+  for (const b of ui.sounds.children) {
+    b.setAttribute("aria-checked", String(b.dataset.sound === sound));
+    if (lang) b.querySelector("span").textContent = TEXT[lang][`sound_${b.dataset.sound}`];
+  }
+  ui.levelField.classList.toggle("off", sound === "off");
+  ui.level.disabled = sound === "off";
+  ui.level.value = String(level);
+  ui.level.style.setProperty("--fill", `${(100 * (level - LEVEL_MIN)) / (LEVEL_MAX - LEVEL_MIN)}%`);
 }
-document.querySelectorAll("[data-noise]").forEach(b => b.addEventListener("click", () => {
-  noise = b.dataset.noise;
-  storage.set(KEYS.noise, noise);
-  renderNoise();
-}));
+Object.assign(ui.level, { min: LEVEL_MIN, max: LEVEL_MAX, step: 1 });
+ui.level.addEventListener("input", () => {
+  level = Number(ui.level.value);
+  storage.set(KEYS.level, String(level));
+  renderSounds();
+  preview({ kind: sound, db: level });
+});
 document.querySelectorAll("[data-min]").forEach(b =>
   b.addEventListener("click", () => start(Number(b.dataset.min))));
 
@@ -199,5 +244,5 @@ info.addEventListener("click", e => { if (e.target === info) closeInfo(); });  /
 
 renderLangSwitch();
 renderVoice();
-renderNoise();
+renderSounds();
 setLang(pickLang(storage.get(KEYS.lang), navigator.languages || [navigator.language]), false);

@@ -41,8 +41,8 @@ async function page(locale, { blockFonts = true } = {}) {
   return p;
 }
 
-async function session(p, noise, minutes) {
-  await p.click(`[data-noise=${noise}]`);
+async function session(p, sound, minutes) {
+  await p.click(`[data-sound=${sound}]`);
   await p.click(`[data-min="${minutes}"]`);
   await p.waitForFunction(() => {
     const a = document.getElementById("player");
@@ -66,7 +66,7 @@ async function session(p, noise, minutes) {
 for (const [locale, lang, night] of [["de-DE", "de", "Gute Nacht"], ["en-GB", "en", "Good night"], ["fr-FR", "en", "Good night"]]) {
   const p = await page(locale);
   check(await p.evaluate(() => document.documentElement.lang) === lang, `${locale}: Sprache ${lang} vorgewählt`);
-  const r = await session(p, "soft", 10);
+  const r = await session(p, "brown", 10);
   check(!r.paused && Math.abs(r.duration - 632) < 1, `${locale}: 10-min-Sitzung spielt (${r.duration.toFixed(0)} s, ${r.rate} Hz)`);
   check(r.peakDb < 0 && Math.abs(r.noiseDb + 43) < 1.5, `${locale}: Spitze ${r.peakDb.toFixed(1)} dBFS, Rauschen ${r.noiseDb.toFixed(1)} dBFS`);
   await p.waitForTimeout(3500);
@@ -97,8 +97,9 @@ for (const [locale, title, heading] of [["de-DE", "Einschlafwörter", "So geht�
 // Umschalter: Wahl wird gemerkt und übersteuert die Browsersprache
 {
   const p = await page("de-DE");
-  await p.click("[data-lang=en]");
-  check(await p.textContent("[data-min='10']") === "10 minutes", "Umschalter: Texte auf Englisch");
+  await p.selectOption("#lang", "en");
+  check(await p.getAttribute("[data-min='10']", "aria-label") === "10 minutes"
+    && await p.textContent("[data-sound=rain]") === "Rain", "Umschalter: Texte auf Englisch");
   await p.reload();
   check(await p.evaluate(() => document.documentElement.lang) === "en", "Umschalter: Wahl bleibt nach Neuladen");
   const r = await session(p, "off", 10);
@@ -120,6 +121,47 @@ for (const [locale, title, heading] of [["de-DE", "Einschlafwörter", "So geht�
   check(loaded.includes("de-m") && loaded.lastIndexOf("de-f") < loaded.indexOf("de-m"),
     `Stimme: nach dem Umschalten nur de-m geladen (${[...new Set(loaded)].join(", ")})`);
   await p.context().close();
+}
+
+// Hintergrund: Klang und Lautstärke getrennt, beides gemerkt; Regen und Wellen spielen im Pegel
+{
+  const p = await page("de-DE");
+  check(await p.getAttribute("[data-sound=brown]", "aria-checked") === "true", "Hintergrund: Rauschen vorgewählt");
+  await p.click("[data-sound=rain]");
+  await p.$eval("#level", e => { e.value = "-35"; e.dispatchEvent(new Event("input", { bubbles: true })); });
+  await p.reload();
+  check(await p.getAttribute("[data-sound=rain]", "aria-checked") === "true"
+    && await p.$eval("#level", e => e.value) === "-35", "Hintergrund: Klang und Lautstärke bleiben nach Neuladen");
+  const r = await session(p, "rain", 10);
+  check(!r.paused && Math.abs(r.noiseDb - (-35 - 5.5)) < 2, `Hintergrund: Regen ${r.noiseDb.toFixed(1)} dBFS`);
+  await p.context().close();
+  const q = await page("de-DE");
+  await q.click("[data-sound=off]");
+  check(await q.$eval("#level", e => e.disabled), "Hintergrund: Stille sperrt den Lautstärkeregler");
+  const w = await session(q, "waves", 10);
+  check(!w.paused && w.noiseDb < -38 && w.noiseDb > -58, `Hintergrund: Wellen ${w.noiseDb.toFixed(1)} dBFS`);
+  await q.context().close();
+}
+
+// Alte Einstellung (ein Regler „mittel“) wird übernommen: Rauschen, -35 dBFS
+{
+  const p = await page("de-DE");
+  await p.evaluate(() => { localStorage.clear(); localStorage.setItem("ew-noise", "medium"); });
+  await p.reload();
+  check(await p.getAttribute("[data-sound=brown]", "aria-checked") === "true"
+    && await p.$eval("#level", e => e.value) === "-35", "Alte Einstellung „mittel“ übernommen");
+  await p.context().close();
+}
+
+// Startseite passt ohne Scrollen und ohne waagrechten Überlauf
+for (const [w, h] of [[360, 740], [320, 568]]) {
+  const ctx = await browser.newContext({ locale: "de-DE", viewport: { width: w, height: h } });
+  const p = await ctx.newPage();
+  await p.route(/fonts\.(googleapis|gstatic)\.com/, r => r.abort());
+  await p.goto(base);
+  const [sh, sw] = await p.evaluate(() => [document.getElementById("start").scrollHeight, document.documentElement.scrollWidth]);
+  check(sh <= h && sw <= w, `Startseite ${w}×${h}: passt (${sw}×${sh})`);
+  await ctx.close();
 }
 
 // Installierbar (Chromium-Prüfung); Manifest folgt der Sprache
@@ -155,7 +197,7 @@ for (const [locale, name] of [["de-DE", "Einschlafen"], ["en-GB", "Sleep Words"]
   await p.context().setOffline(true);
   await p.reload();
   check(await p.evaluate(() => document.documentElement.lang) === "de", "Offline: App lädt aus dem Cache");
-  const r = await session(p, "soft", 10);
+  const r = await session(p, "brown", 10);
   check(!r.paused && Math.abs(r.duration - 632) < 1, "Offline: Sitzung spielt");
   await p.context().close();
 }

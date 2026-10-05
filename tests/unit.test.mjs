@@ -5,7 +5,8 @@ import { shuffle, freshDeck, validDeck, draw } from "../web/js/deck.js";
 import { mixSession } from "../web/js/mix.js";
 import { createWav } from "../web/js/wav.js";
 import { pickLang, LANGS, TEXT } from "../web/js/i18n.js";
-import { SESSION } from "../web/js/config.js";
+import { SESSION, AMBIENT } from "../web/js/config.js";
+import { SOUNDS } from "../web/js/ambient.js";
 
 // deterministischer Zufall (mulberry32)
 const seeded = (seed = 1) => () => {
@@ -59,10 +60,10 @@ test("wav: gültiger Kopf", () => {
   assert.equal(pcm.length, 100);
 });
 
-function analyse(durationS, noiseDb, rate = 16000) {
+function analyse(durationS, sound, rate = 16000) {
   const marks = onsets(durationS);
   const clip = new Float32Array(rate).map((_, i) => 0.708 * Math.sin(i / 3));  // −3 dBFS
-  const buf = mixSession({ durationS, marks, clips: marks.map(() => clip), rate, noiseDb, rng: seeded(7) });
+  const buf = mixSession({ durationS, marks, clips: marks.map(() => clip), rate, sound, rng: seeded(7) });
   const s = new Int16Array(buf, 44);
   let peak = 0;
   for (const x of s) peak = Math.max(peak, Math.abs(x));
@@ -74,16 +75,44 @@ function analyse(durationS, noiseDb, rate = 16000) {
   return { s, rate, marks, peakDb: 20 * Math.log10(peak / 32768), rms };
 }
 
-test("mix: Länge, Spitze < 0 dBFS, Rauschpegel wie eingestellt", () => {
-  for (const [db, tol] of [[-43, 1], [-35, 1]]) {
-    const r = analyse(120, db);
-    assert.equal(r.s.length, Math.ceil((SESSION.lead + 120 + SESSION.tail) * r.rate));
-    assert.ok(r.peakDb < -1, `Spitze ${r.peakDb}`);
-    assert.ok(Math.abs(r.rms(4, 9) - db) < tol, `Rauschen ${r.rms(4, 9)} statt ${db}`);
-    assert.ok(r.rms(SESSION.lead + 120 + SESSION.tail - 1, SESSION.lead + 120 + SESSION.tail) < db - 30, "Ende leise");
+test("mix: Länge, Spitze < 0 dBFS, Hintergrund im Pegel wie eingestellt (je Klang)", () => {
+  for (const kind of Object.keys(SOUNDS)) {
+    for (const db of [AMBIENT.level.default, -35]) {
+      const r = analyse(300, { kind, db });
+      const want = db + AMBIENT.trim[kind], end = SESSION.lead + 300 + SESSION.tail;
+      assert.equal(r.s.length, Math.ceil(end * r.rate));
+      assert.ok(r.peakDb < -1, `${kind} ${db}: Spitze ${r.peakDb}`);
+      // zwischen erstem (2–3 s) und zweitem Wort (10 s); Wellen schwanken kurzfristig stärker
+      const level = r.rms(4, 9);
+      assert.ok(Math.abs(level - want) < (kind === "waves" ? 5 : 1.5), `${kind} ${db}: ${level} statt ${want}`);
+      assert.ok(r.rms(end - 1, end) < want - 30, `${kind}: Ende leise`);
+    }
   }
   const silent = analyse(60, null);
   assert.equal(silent.rms(4, 9), -Infinity);
+});
+
+test("mix: Hintergrund über lange Strecke im Pegel (Wellen schwanken nur kurzfristig)", () => {
+  for (const kind of Object.keys(SOUNDS)) {
+    const durationS = 400, rate = 8000;
+    const buf = mixSession({ durationS, marks: [], clips: [], rate, sound: { kind, db: -40 }, rng: seeded(11) });
+    const s = new Int16Array(buf, 44);
+    let q = 0;
+    for (let i = 10 * rate; i < 390 * rate; i++) q += s[i] * s[i];
+    const level = 20 * Math.log10(Math.sqrt(q / (380 * rate)) / 32768), want = -40 + AMBIENT.trim[kind];
+    assert.ok(Math.abs(level - want) < 1, `${kind}: ${level.toFixed(2)} statt ${want}`);
+  }
+});
+
+test("ambient: jeder Klang im Umschalter hat Generator, Ausgleich und Text", () => {
+  for (const kind of AMBIENT.sounds) {
+    if (kind !== "off") {
+      assert.ok(kind in SOUNDS, `${kind}: Generator fehlt`);
+      assert.equal(typeof AMBIENT.trim[kind], "number", `${kind}: trim fehlt`);
+    }
+    for (const l of LANGS) assert.ok(TEXT[l][`sound_${kind}`], `${l}: sound_${kind} fehlt`);
+  }
+  assert.ok(AMBIENT.sounds.includes(AMBIENT.default));
 });
 
 test("mix: Stimme wird leiser", () => {
