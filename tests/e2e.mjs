@@ -253,8 +253,12 @@ for (const [locale, title, heading] of [["de-DE", "Einschlafwörter", "So geht�
   check(!(await p.$eval("#start", e => e.hidden)) && await p.$eval("#player", a => !a.src.startsWith("blob:")),
     "Vorbereitung: Esc bricht ab, zurück zur Startseite");
   check(await p.evaluate(() => localStorage.getItem("ew-deck")) === deck0, "Vorbereitung: Abbruch verbraucht keine Wörter");
+  // Langsam wie ein Handy, sonst ist die Vorbereitung fertig, bevor das Halten (1,2 s) es ist
+  const cdp = await p.context().newCDPSession(p);
+  await cdp.send("Emulation.setCPUThrottlingRate", { rate: 20 });
   await p.click("#go");
   await p.mouse.move(180, 300); await p.mouse.down(); await p.waitForTimeout(1500); await p.mouse.up();
+  await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
   await p.waitForTimeout(500);
   check(!(await p.$eval("#start", e => e.hidden)), "Vorbereitung: Halten bricht ab");
   await p.context().close();
