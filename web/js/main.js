@@ -15,10 +15,12 @@ const stage = createStage({ audio: $("player"), word: $("word"), tapHint: $("tap
 // Phasen: start -> building -> playing -> night -> done (-> start)
 let phase = "start";
 let lang = null;
+const clipSet = () => `${lang}-${voice}`;  // web/clips/<set>.json, nur die gewählte Stimme wird geladen
 
 // ---------- gespeicherte Einstellungen ----------
 const KEYS = {
   lang: "ew-lang",
+  voice: "ew-voice",
   noise: "ew-noise",
   deck: l => (l === "de" ? "ew-deck" : `ew-deck-${l}`),
 };
@@ -27,6 +29,9 @@ const LEGACY_NOISE = { aus: "off", leise: "soft", mittel: "medium" };
 let noise = storage.get(KEYS.noise);
 noise = LEGACY_NOISE[noise] || noise;
 if (!(noise in NOISE.levels)) noise = NOISE.default;
+const VOICES = ["f", "m"];
+let voice = storage.get(KEYS.voice);
+if (!VOICES.includes(voice)) voice = VOICES[0];
 
 function loadDeck(words) {
   const d = storage.getJSON(KEYS.deck(lang));
@@ -34,29 +39,36 @@ function loadDeck(words) {
 }
 
 // ---------- Sitzung ----------
-async function buildSession(minutes) {
+async function buildSession(minutes, set) {
   const durationS = minutes * 60;
   const marks = onsets(durationS);
-  const bundle = await loadBundle(lang);
+  const bundle = await loadBundle(set);
   const all = Object.keys(bundle);
   const { words, deck } = draw(loadDeck(all), all, marks.length);
   marks.forEach((m, i) => { m.w = words[i]; });
-  const [rate, clips] = await Promise.all([outRate(lang), Promise.all(words.map(w => pcm(lang, w)))]);
+  const [rate, clips] = await Promise.all([outRate(set), Promise.all(words.map(w => pcm(set, w)))]);
   const wav = mixSession({ durationS, marks, clips, rate, noiseDb: NOISE.levels[noise] });
   return { url: URL.createObjectURL(new Blob([wav], { type: "audio/wav" })), marks, deck };
 }
 
 // Dekodiert schon vorab die Wörter der längsten Sitzung, damit der Tap schnell ist.
-async function prewarm(forLang) {
+async function prewarm(set) {
   try {
-    const bundle = await loadBundle(forLang);
-    if (forLang !== lang) return;
+    const bundle = await loadBundle(set);
+    if (set !== clipSet()) return;
     const all = Object.keys(bundle);
     const { words } = draw(loadDeck(all), all, maxWordsPerSession());
-    for (let i = 0; i < words.length && forLang === lang; i += 4) {
-      await Promise.all(words.slice(i, i + 4).map(w => pcm(forLang, w)));
+    for (let i = 0; i < words.length && set === clipSet(); i += 4) {
+      await Promise.all(words.slice(i, i + 4).map(w => pcm(set, w)));
     }
   } catch (e) { /* beim Start erneut versucht */ }
+}
+
+// Lädt die Clips der aktuellen Sprache und Stimme vor und legt sie offline ab.
+function prepare() {
+  const set = clipSet();
+  prewarm(set);
+  loadBundle(set).then(() => keepOffline(set), () => {});
 }
 
 async function start(minutes) {
@@ -67,7 +79,7 @@ async function start(minutes) {
   ui.stage.hidden = false;
   const forLang = lang;
   try {
-    const s = await buildSession(minutes);
+    const s = await buildSession(minutes, clipSet());
     if (phase !== "building") { URL.revokeObjectURL(s.url); return; }
     storage.setJSON(KEYS.deck(forLang), s.deck);
     phase = "playing";
@@ -101,8 +113,7 @@ function setLang(code, remember) {
   ui.lang.querySelectorAll("button").forEach(b =>
     b.setAttribute("aria-checked", String(b.dataset.lang === code)));
   ui.status.textContent = "";
-  prewarm(code);
-  loadBundle(code).then(() => keepOffline(code), () => {});
+  prepare();
 }
 
 function renderLangSwitch() {
@@ -120,6 +131,17 @@ function renderLangSwitch() {
 }
 
 // ---------- Bedienung ----------
+function renderVoice() {
+  document.querySelectorAll("[data-voice]").forEach(b =>
+    b.setAttribute("aria-checked", String(b.dataset.voice === voice)));
+}
+document.querySelectorAll("[data-voice]").forEach(b => b.addEventListener("click", () => {
+  if (b.dataset.voice === voice) return;
+  voice = b.dataset.voice;
+  storage.set(KEYS.voice, voice);
+  renderVoice();
+  prepare();
+}));
 function renderNoise() {
   document.querySelectorAll("[data-noise]").forEach(b =>
     b.setAttribute("aria-checked", String(b.dataset.noise === noise)));
@@ -176,5 +198,6 @@ $("info-done").addEventListener("click", closeInfo);
 info.addEventListener("click", e => { if (e.target === info) closeInfo(); });  // Tipp neben das Blatt
 
 renderLangSwitch();
+renderVoice();
 renderNoise();
 setLang(pickLang(storage.get(KEYS.lang), navigator.languages || [navigator.language]), false);

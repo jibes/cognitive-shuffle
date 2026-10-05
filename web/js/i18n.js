@@ -1,5 +1,5 @@
 // Oberflächentexte je Sprache. Eine neue Sprache braucht hier einen Eintrag
-// und web/clips/<code>.json (tools/build_clips.py --lang <code>).
+// und web/clips/<code>-f.json, <code>-m.json (tools/build_clips.py --lang <code> --gender f|m).
 
 export const TEXT = {
   de: {
@@ -8,6 +8,9 @@ export const TEXT = {
     appName: "Einschlafen",
     artist: "Wörter zum Einschlafen",
     hint: "Dauer antippen, Handy weglegen und den Wörtern zuhören, bis sie von selbst verklingen.",
+    voice: "Stimme",
+    voiceF: "weiblich",
+    voiceM: "männlich",
     noise: "Rauschen",
     noiseOff: "aus",
     noiseSoft: "leise",
@@ -27,6 +30,9 @@ export const TEXT = {
     appName: "Sleep Words",
     artist: "Words to fall asleep to",
     hint: "Tap a length, put the phone down and listen to the words until they fade away on their own.",
+    voice: "Voice",
+    voiceF: "female",
+    voiceM: "male",
     noise: "Noise",
     noiseOff: "off",
     noiseSoft: "soft",

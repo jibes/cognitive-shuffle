@@ -1,4 +1,6 @@
 # Sleep words – one word per line, # = comment
+# Criteria: concrete and easy to picture, neutral (nothing loud, creepy, threatening,
+# no chores), familiar, unambiguous; no duplicates
 # Nature
 cloud
 raindrop
@@ -60,10 +62,7 @@ alpine meadow
 mountain hut
 boulder
 river stone
-stream
-spring water
 lakeshore
-mudflat
 sea breeze
 chalk cliff
 juniper
@@ -82,7 +81,6 @@ ash tree
 mistletoe
 ivy
 treetop
-seed
 sunbeam
 summer meadow
 ear of corn
@@ -187,6 +185,19 @@ apple tree
 cherry blossom
 lilac bush
 rose bush
+dusk
+constellation
+half moon
+morning sun
+fresh snow
+autumn mist
+island
+cove
+glacier
+pebble beach
+lavender field
+sunflower field
+apple blossom
 # Kitchen
 teapot
 teacup
@@ -270,14 +281,9 @@ plum cake
 rhubarb crumble
 blueberry muffin
 marzipan
-nougat
 chocolate
 praline
-toffee
 lollipop
-candyfloss
-jelly bean
-liquorice
 caramel
 honey cake
 poppy seed roll
@@ -293,9 +299,6 @@ eggshell
 mashed potato
 potato soup
 lentil soup
-pea soup
-vegetable soup
-noodle soup
 tomato soup
 pumpkin soup
 noodles
@@ -305,10 +308,7 @@ dumpling
 apple sauce
 stewed fruit
 strawberry jam
-cherry jam
-apricot jam
 apple juice
-grape juice
 orange juice
 lemonade
 sparkling water
@@ -411,13 +411,25 @@ water jug
 lemonade jug
 peppermint tea
 chamomile tea
-fruit tea
-rosehip tea
-cinnamon tea
-apple tea
 ice cream cone
 scoop of ice cream
 milkshake
+sieve
+grater
+saucepan
+frying pan
+dinner plate
+fork
+mug
+baked apple
+jacket potato
+toast
+crumpet
+scone
+courgette
+bell pepper
+clementine
+blackcurrant
 # Garden
 watering can
 wheelbarrow
@@ -475,7 +487,6 @@ beehive
 vegetable patch
 strawberry patch
 raised bed
-cold frame
 flower meadow
 orchard
 apple harvest
@@ -506,6 +517,10 @@ fruit ladder
 picking basket
 harvest basket
 willow branch
+garden hose
+pea pod
+runner bean
+sundial
 # Animals
 hedgehog
 hare
@@ -546,9 +561,7 @@ sparrow
 owl
 woodpecker
 stork
-crane
 penguin
-seal
 dolphin
 starfish
 sloth
@@ -575,7 +588,6 @@ fawn
 stag
 piglet
 calf
-kid goat
 sheepdog
 turkey
 peacock
@@ -585,8 +597,6 @@ partridge
 pigeon
 turtledove
 magpie
-jay
-nuthatch
 chaffinch
 goldfinch
 bullfinch
@@ -598,24 +608,15 @@ nightingale
 skylark
 swallow
 cuckoo
-hoopoe
 heron
 flamingo
 pelican
 cormorant
 seagull
-tern
-oystercatcher
 puffin
 albatross
 snowy owl
 tawny owl
-buzzard
-kestrel
-grebe
-coot
-mallard
-mute swan
 greylag goose
 wild goose
 hummingbird
@@ -628,30 +629,18 @@ toad
 newt
 salamander
 lizard
-garden snail
-earthworm
-ant
-cricket
-brimstone butterfly
 peacock butterfly
 moth
 caterpillar
 honeybee
-cockchafer
 stag beetle
-rose chafer
-pond skater
 carp
-perch
 salmon
-stickleback
-plaice
 herring
 mackerel
 clownfish
 sea urchin
 hermit crab
-lobster
 shrimp
 manatee
 walrus
@@ -665,15 +654,10 @@ kangaroo
 wombat
 platypus
 meerkat
-coati
-anteater
 armadillo
 lemur
-gorilla
 orangutan
-chimpanzee
 gibbon
-rhinoceros
 hippo
 antelope
 gazelle
@@ -683,9 +667,6 @@ yak
 moose
 reindeer
 arctic fox
-snow hare
-ibex
-chamois
 dromedary
 okapi
 tapir
@@ -700,9 +681,16 @@ dachshund
 poodle
 spaniel
 labrador
-st bernard
+Saint Bernard
 pug
 collie
+fox
+dog
+cockerel
+barn owl
+dalmatian
+beagle
+sea otter
 # Toys
 dice
 marble
@@ -736,7 +724,6 @@ paintbrush
 rubber stamp
 wooden horse
 toy shop
-glass marble
 doll's pram
 farmyard
 puppet show
@@ -767,8 +754,6 @@ pull-along duck
 toy car
 tricycle
 balance bike
-scooter
-wooden sled
 sledge
 swing
 seesaw
@@ -776,9 +761,7 @@ climbing frame
 sand mould
 little watering can
 toy boat
-sailing boat
 ship in a bottle
-chalk
 pavement chalk
 hopscotch
 colouring book
@@ -796,14 +779,15 @@ friendship bracelet
 weaving loom
 crochet hook
 yarn
-confetti
-streamer
 puzzle piece
 glockenspiel
 xylophone
-drum
 harmonica
 ukulele
+board game
+toy castle
+crayon
+potter's wheel
 # Home
 cushion
 wool blanket
@@ -847,14 +831,12 @@ bicycle
 bicycle bell
 rowing boat
 sailboat
-beach chair
 sun hat
 picnic blanket
 handcart
 haystack
 barn
 windmill
-letterbox
 tent
 hot air balloon
 feather bed
@@ -889,20 +871,15 @@ button tin
 wooden button
 ribbon
 wrapping paper
-little box
 hatbox
 jewellery box
 photo album
-writing paper
-envelope
 bookmark
 stack of books
 fairy tale book
 cookbook
 poetry book
-map
 globe
-compass
 binoculars
 magnifying glass
 hiking boot
@@ -922,7 +899,6 @@ coat hook
 hat rack
 umbrella stand
 shoe rack
-house key
 door wreath
 shutter
 window frame
@@ -938,7 +914,6 @@ floorboard
 wallpaper
 tapestry
 wardrobe
-steamer trunk
 wooden chest
 glass cabinet
 sofa
@@ -946,17 +921,13 @@ coffee table
 side table
 bedside table
 cradle
-cot
 four-poster bed
 hanging chair
 beanbag
-doll's cradle
-bobble hat
 earmuffs
 mitten
 neckerchief
 raincoat
-rain jacket
 pyjamas
 nightgown
 bed socks
@@ -975,33 +946,66 @@ canoe
 kayak
 raft
 fishing boat
-sail
 anchor
 harbour wall
 fishing net
 log cabin
 beach house
 farmhouse
-half-timbered house
 thatched roof
 farm gate
 barn door
 hayloft
 horse stable
 cowshed
-manger
 milking stool
-butter churn
 spinning wheel
-loom
 sheep's wool
 felt ball
 wooden clog
 willow whistle
-carousel
-candy cane
 market stall
 flower stall
 fruit stall
-ice cream van
 tea glass
+candle
+matchbox
+nightlight
+bouquet
+dried flowers
+wooden box
+sewing machine
+velvet cushion
+linen cloth
+silk ribbon
+pencil
+eraser
+notebook
+fountain pen
+pencil case
+sandal
+straw hat
+# Music
+harp
+violin
+cello
+piano
+guitar
+triangle
+accordion
+flute
+# Out and about
+ferry
+gondola
+steam train
+tram
+horse and cart
+pedalo
+bakery
+library
+village green
+market square
+veranda
+balcony
+fireplace
+clay jug

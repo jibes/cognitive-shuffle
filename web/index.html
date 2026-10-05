@@ -33,8 +33,15 @@
     <p class="hint" data-t="hint"></p>
   </header>
   <div>
+    <span class="label" id="voice-label" data-t="voice"></span>
+    <div class="row pick" role="radiogroup" aria-labelledby="voice-label">
+      <button type="button" role="radio" data-voice="f" data-t="voiceF"></button>
+      <button type="button" role="radio" data-voice="m" data-t="voiceM"></button>
+    </div>
+  </div>
+  <div>
     <span class="label" id="noise-label" data-t="noise"></span>
-    <div class="row noise" role="radiogroup" aria-labelledby="noise-label">
+    <div class="row pick" role="radiogroup" aria-labelledby="noise-label">
       <button type="button" role="radio" data-noise="off" data-t="noiseOff"></button>
       <button type="button" role="radio" data-noise="soft" data-t="noiseSoft"></button>
       <button type="button" role="radio" data-noise="medium" data-t="noiseMedium"></button>
@@ -65,7 +72,7 @@
 
       <h3>So geht’s</h3>
       <ol>
-        <li>Rauschen wählen (aus, leise, mittel) und auf eine Dauer tippen.</li>
+        <li>Stimme (weiblich, männlich) und Rauschen (aus, leise, mittel) wählen und auf eine Dauer tippen.</li>
         <li>Handy weglegen, Bildschirm sperren – die Wörter laufen weiter.</li>
         <li>Zu jedem Wort ein Bild ausmalen: Farbe, Form, wo es liegt. Kommt kein Bild, einfach das Wort im Kopf wiederholen. Nichts festhalten; beim nächsten Wort weiter.</li>
       </ol>
@@ -96,7 +103,7 @@
 
       <h3>How to use</h3>
       <ol>
-        <li>Choose noise (off, soft, medium) and tap a length.</li>
+        <li>Choose a voice (female, male) and noise (off, soft, medium), then tap a length.</li>
         <li>Put the phone down and lock the screen – the words keep playing.</li>
         <li>Picture each word: its colour, shape, where it is. If no image comes, just repeat the word in your head. Don’t hold on; move on with the next word.</li>
       </ol>

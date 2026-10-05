@@ -86,12 +86,12 @@ button {
 button:focus { outline: none; }
 button:focus-visible { border-color: var(--muted); }
 button:active { background: var(--line); }
-.noise button {
+.pick button {
   font-size: 1.15rem;
   min-height: 52px;
   color: var(--muted);
 }
-.noise button[aria-checked="true"] {
+.pick button[aria-checked="true"] {
   color: var(--text);
   background: var(--line);
 }
@@ -219,6 +219,6 @@ button:active { background: var(--line); }
   .hint { font-size: 1.15rem; line-height: 1.4; }
   .col { gap: 10px; }
   button { min-height: 54px; font-size: 1.3rem; }
-  .noise button { min-height: 46px; }
+  .pick button { min-height: 46px; }
   .label { margin-bottom: 6px; }
 }

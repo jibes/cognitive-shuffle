@@ -106,6 +106,22 @@ for (const [locale, title, heading] of [["de-DE", "Einschlafwörter", "So geht�
   await p.context().close();
 }
 
+// Stimme: männlich lädt nur die eigene Clip-Datei, Wahl bleibt nach Neuladen
+{
+  const p = await page("de-DE");
+  const loaded = [];
+  p.on("request", r => { const m = r.url().match(/clips\/([\w-]+)\.json/); if (m) loaded.push(m[1]); });
+  check(await p.getAttribute("[data-voice=f]", "aria-checked") === "true", "Stimme: weiblich vorgewählt");
+  await p.click("[data-voice=m]");
+  await p.reload();
+  check(await p.getAttribute("[data-voice=m]", "aria-checked") === "true", "Stimme: Wahl bleibt nach Neuladen");
+  const r = await session(p, "off", 10);
+  check(!r.paused && Math.abs(r.duration - 632) < 1, "Stimme: männliche Sitzung spielt");
+  check(loaded.includes("de-m") && loaded.lastIndexOf("de-f") < loaded.indexOf("de-m"),
+    `Stimme: nach dem Umschalten nur de-m geladen (${[...new Set(loaded)].join(", ")})`);
+  await p.context().close();
+}
+
 // Installierbar (Chromium-Prüfung); Manifest folgt der Sprache
 for (const [locale, name] of [["de-DE", "Einschlafen"], ["en-GB", "Sleep Words"]]) {
   const p = await page(locale, { blockFonts: false });
@@ -129,8 +145,8 @@ for (const [locale, name] of [["de-DE", "Einschlafen"], ["en-GB", "Sleep Words"]
   const p = await page("de-DE", { blockFonts: false });
   // waitForFunction wertet ein Promise als „wahr“ – daher selbst abfragen.
   const cached = () => p.evaluate(async () => {
-    const c = await caches.open("ew-v1");
-    return !!(navigator.serviceWorker.controller && await c.match("clips/de.json") && await c.match("./"));
+    const c = await caches.open("ew-v2");
+    return !!(navigator.serviceWorker.controller && await c.match("clips/de-f.json") && await c.match("./"));
   });
   for (let t = Date.now(); !(await cached()); ) {
     if (Date.now() - t > 60000) throw new Error("Offline-Cache nicht befüllt");

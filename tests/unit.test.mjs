@@ -114,6 +114,16 @@ test("sw.js: App-Hülle vollständig und vorhanden", async () => {
   assert.equal(offline.match(/CACHE = "([^"]+)"/)[1], src.match(/CACHE = "([^"]+)"/)[1], "Cache-Name gleich");
 });
 
+test("Clips: je Sprache weiblich und männlich, gleiche Wörter", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const load = async set => JSON.parse(await readFile(new URL(`../web/clips/${set}.json`, import.meta.url), "utf8"));
+  for (const l of LANGS) {
+    const [f, m] = [Object.keys(await load(`${l}-f`)).sort(), Object.keys(await load(`${l}-m`)).sort()];
+    assert.ok(f.length >= 100, `${l}: ${f.length} Wörter`);
+    assert.deepEqual(m, f, `${l}: gleiche Wörter für beide Stimmen`);
+  }
+});
+
 test("Manifeste: je Sprache vorhanden, gleich aufgebaut, Icons existieren", async () => {
   const { readFile, access } = await import("node:fs/promises");
   const web = new URL("../web/", import.meta.url);

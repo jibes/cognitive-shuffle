@@ -1,16 +1,17 @@
 # Einschlafwörter / Sleep Words
 
 Einschlafhilfe nach der Cognitive-Shuffle-Methode: neutrale Wörter in wachsenden Pausen, läuft bei gesperrtem Bildschirm weiter.
-**https://jibes.github.io/cognitive-shuffle/** öffnen (Brave: Hintergrundwiedergabe erlauben), Dauer antippen, sperren. Tippen = nächstes Wort, lange drücken = beenden. Sprache folgt dem Browser, umschaltbar oben rechts. Installierbar („Zum Startbildschirm“ / „App installieren“); nach einem Online-Besuch läuft sie offline (Service Worker `web/sw.js`; Clips der zuletzt genutzten Sprachen).
+**https://jibes.github.io/cognitive-shuffle/** öffnen (Brave: Hintergrundwiedergabe erlauben), Stimme (weiblich/männlich) und Dauer antippen, sperren. Tippen = nächstes Wort, lange drücken = beenden. Sprache folgt dem Browser, umschaltbar oben rechts. Installierbar („Zum Startbildschirm“ / „App installieren“); nach einem Online-Besuch läuft sie offline (Service Worker `web/sw.js`; Clips der zuletzt genutzten Sprachen).
 
 | Ordner | Inhalt |
 |---|---|
-| `web/` | die App (statisch, ES-Module, kein Build): `js/config.js` Stellschrauben, `js/i18n.js` Texte, `clips/<lang>.json` Audio |
+| `web/` | die App (statisch, ES-Module, kein Build): `js/config.js` Stellschrauben, `js/i18n.js` Texte, `clips/<lang>-<f\|m>.json` Audio je Stimme |
 | `words/` | Wortlisten je Sprache, ein Wort pro Zeile |
 | `tools/` | `build_clips.py`: Wortliste → `web/clips/<lang>.json` (TTS, Trimmen, Normalisieren, MP3) |
 | `tests/` | `npm test` (Logik, Node), `npm run e2e` (Browser, Playwright) |
 
 - Lokal: `npm run serve` → http://localhost:8000
-- Clips bauen: `pip install -r tools/requirements.txt` + ffmpeg, dann `python tools/build_clips.py --lang de` (edge-tts Katja/Sonia; ohne Key: `--engine google`; offline: `--engine piper --model …onnx`; ElevenLabs: `--engine eleven --voice <voice_id>` mit `ELEVENLABS_API_KEY`, ~40 Wörter je Request, Schnitt an Zeitstempeln, Cache `tools/.cache/eleven/`, Proben per `--only … --mp3-dir DIR`). Eingecheckt sind Google-Stimmen (edge-tts war in der Build-Umgebung nicht erreichbar).
+- Clips bauen: `pip install -r tools/requirements.txt` + ffmpeg, dann `python tools/build_clips.py --lang de --engine eleven --gender f` (bzw. `m`) → `web/clips/de-f.json`. ElevenLabs v3 mit `ELEVENLABS_API_KEY`: Laura/Stefan (de), Verity/Nathaniel (en), jedes Wort ein Request mit Regie `[calm, measured, slow]`, stability 1.0, speed 0.85; Cache `tools/.cache/eleven/` (nie doppelt zahlen). `--count 300` wählt gleichmäßig über die Kategorien; ohne `--count` alle Wörter (der Cache ergänzt nur Fehlendes). Proben per `--only … --mp3-dir DIR`. Alternativen (schreiben `<lang>.json`, für die App umbenennen): edge-tts, `--engine google` ohne Key, `--engine piper --model …onnx` offline.
+- Wortlisten: Kriterien stehen als Kommentar oben in `words/<lang>.txt` (bildhaft, neutral, alltagsbekannt, eindeutig).
 - Neue Sprache: `words/<code>.txt`, Eintrag in `LANGS` (`tools/build_clips.py`) und `TEXT` (`web/js/i18n.js`), Clips bauen.
 - Deploy: Push auf `main` → GitHub Actions testet und veröffentlicht `web/` (Pages-Quelle: „GitHub Actions“).
