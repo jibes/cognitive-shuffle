@@ -51,10 +51,10 @@ export function makeLoop(data, rate) {
   return { data: out, scale: 1 / Math.sqrt(q / period || 1) };
 }
 
-// Spielt eine Schleife ab zufälliger Stelle (jede Nacht anders).
-export function loopFill(loop, rng) {
+// Spielt eine Schleife ab zufälliger Stelle (jede Nacht anders); skip: so viele Samples überspringen.
+export function loopFill(loop, rng, skip = 0) {
   const d = loop.data, n = d.length;
-  let pos = Math.floor(rng() * n);
+  let pos = (Math.floor(rng() * n) + skip) % n;
   return buf => {
     for (let i = 0; i < buf.length; i++) {
       buf[i] = d[pos];
@@ -63,8 +63,9 @@ export function loopFill(loop, rng) {
   };
 }
 
-// Deterministischer Zufall nur fürs Eichen (mulberry32)
-function seeded(seed) {
+// Deterministischer Zufall (mulberry32): Eichen, und Hintergrund einer Sitzung reproduzierbar
+// (beim Neumischen ab Minute x klingt er nahtlos gleich weiter)
+export function seeded(seed) {
   return () => {
     seed = (seed + 0x6d2b79f5) | 0;
     let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);

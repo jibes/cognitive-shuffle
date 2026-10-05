@@ -145,8 +145,8 @@ button:focus-visible { border-color: var(--muted); }
   color: var(--muted);
   padding: 0 4px;
 }
-#level-field { transition: opacity .2s; }
-#level-field.off { opacity: .35; }
+.level-field { transition: opacity .2s; }
+.level-field.off { opacity: .35; }
 input[type=range] {
   --fill: 50%;
   flex: 1;
@@ -187,23 +187,47 @@ input[type=range]::-moz-range-thumb {
 }
 input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 2px var(--text); }
 
-/* Dauer: drei Kacheln, Tippen startet */
-.times { margin-top: auto; }
-.times .row { display: flex; gap: 10px; }
-.times button {
-  flex: 1 1 0;
-  min-height: 92px;
-  border-radius: 22px;
-  border-color: var(--muted);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0;
+/* Dauer: Rad in 5-min-Schritten, darunter Starten */
+.times { margin-top: auto; display: flex; flex-direction: column; }
+.wheel {
+  --item: 64px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 30%, #000 70%, transparent);
+  mask-image: linear-gradient(to right, transparent, #000 30%, #000 70%, transparent);
+  border-radius: 16px;
+  outline: none;
 }
-.times button:active { background: var(--line); }
-.times .n { font-size: 2.3rem; line-height: 1; color: var(--text); }
-.times .u { font-size: .95rem; color: var(--muted); }
+.wheel::-webkit-scrollbar { display: none; }
+.wheel:focus-visible { box-shadow: inset 0 0 0 1px var(--muted); }
+.wheel .track {
+  display: flex;
+  width: max-content;
+  padding: 0 calc(50% - var(--item) / 2);
+}
+.wheel .item {
+  width: var(--item);
+  flex: none;
+  scroll-snap-align: center;
+  text-align: center;
+  font-size: 1.5rem;
+  line-height: 52px;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color .15s, transform .15s;
+}
+.wheel .item.on { color: var(--text); transform: scale(1.45); }
+.times .unit { text-align: center; font-size: .95rem; color: var(--muted); margin: -6px 0 10px; }
+.go {
+  min-height: 56px;
+  width: 100%;
+  font-size: 1.35rem;
+  border-color: var(--muted);
+}
+.go:active { background: var(--line); }
+
 .status {
   margin: -8px 0 0;
   flex-shrink: 0;
@@ -235,6 +259,74 @@ input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 2px va
   opacity: 0;
 }
 #word.night { transition: opacity 2.5s ease-in-out; }
+#stage.unlocked { cursor: auto; }
+
+/* Hinweis zu Beginn, verblasst */
+.hold-hint {
+  position: absolute;
+  bottom: max(28px, env(safe-area-inset-bottom));
+  left: 0; right: 0;
+  margin: 0;
+  text-align: center;
+  font-size: 1rem;
+  color: var(--muted);
+  opacity: .7;
+  transition: opacity 3s;
+}
+.hold-hint.fade { opacity: 0; }
+
+/* Gedrückt halten: Ring um das Stoppsymbol */
+.hold {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.hold .ring-bg { fill: none; stroke: var(--line); stroke-width: 3; }
+.hold .ring {
+  fill: none;
+  stroke: var(--text);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  transform: rotate(-90deg);
+  transform-origin: 60px 60px;
+}
+.hold .stop { fill: var(--muted); }
+
+/* Bedienfeld während der Sitzung: gedimmt, ganze Fläche */
+.panel {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  max-width: 28rem;
+  margin: 0 auto;
+  padding:
+    max(24px, env(safe-area-inset-top))
+    max(16px, env(safe-area-inset-right))
+    max(24px, env(safe-area-inset-bottom))
+    max(16px, env(safe-area-inset-left));
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 20px;
+  opacity: .8;
+  animation: panel-in .4s ease-out;
+}
+@keyframes panel-in { from { opacity: 0; } to { opacity: .8; } }
+.remain { display: flex; align-items: center; gap: 12px; }
+.remain .adj { width: 64px; height: 64px; flex: none; font-size: 1.5rem; font-style: normal; color: var(--text); }
+.remain .adj:active { background: var(--line); }
+.remain .left { flex: 1; text-align: center; display: flex; flex-direction: column; }
+.remain .left .n { font-size: 2.6rem; line-height: 1.1; color: var(--text); }
+.remain .left .u { font-size: .95rem; color: var(--muted); }
+.panel-status { margin: 0; min-height: 1.3em; text-align: center; font-size: .95rem; }
+.actions { display: flex; gap: 10px; }
+.actions button { flex: 1; min-height: 56px; font-size: 1.2rem; }
+.actions .resume { border-color: var(--muted); }
+.actions button:active { background: var(--line); }
 
 /* Runde Symbolknöpfe (Info, Schließen) */
 .icon {
@@ -318,11 +410,12 @@ input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 2px va
   .label { margin-bottom: 5px; }
   .seg button { min-height: 40px; }
   .sounds button { min-height: 52px; }
-  .times button { min-height: 76px; }
-  .times .n { font-size: 2rem; }
+  .wheel .item { line-height: 44px; }
+  .go { min-height: 48px; }
 }
 @media (max-height: 600px) {
-  #start { gap: 12px; }
-  .sounds button { min-height: 48px; }
-  .times button { min-height: 68px; }
+  #start { gap: 10px; }
+  .hint { display: none; }
+  .sounds button { min-height: 46px; }
+  .times .unit { margin-bottom: 6px; }
 }

@@ -1,23 +1,34 @@
-import { DISPLAY, lerp } from "./config.js";
+import { DISPLAY, SESSION, lerp } from "./config.js";
 import { createWav } from "./wav.js";
 
 // Wiedergabe-Element und Wortanzeige. Die Anzeige folgt audio.currentTime;
 // bei gesperrtem Bildschirm läuft nur das <audio>-Element weiter.
+// Eine Sitzung kann aus mehreren Stücken bestehen (Neumischen ab der aktuellen Stelle):
+// offset = Sitzungszeit, bei der das laufende Stück beginnt.
 
 // 0,1 s Stille – zum Freischalten unter iOS noch im Tap
 const SILENT_WAV = URL.createObjectURL(new Blob([createWav(800, 8000).buffer], { type: "audio/wav" }));
 
 export function createStage({ audio, word, tapHint }) {
-  let marks = null, idx = -1, rafId = 0, lastOpacity = "";
+  let marks = null, offset = 0, idx = -1, rafId = 0, lastOpacity = "", hidden = false;
+  let pendingSwap = null;
+
+  const now = () => offset + audio.currentTime;
+
+  // Kein Wort hörbar: zwischen Ende des letzten (höchstens maxClip) und kurz vor dem nächsten
+  function quiet(t) {
+    return !marks.some(m => t > m.t - 0.4 && t < m.t + SESSION.maxClip);
+  }
 
   function frame() {
     rafId = 0;
     if (!marks) return;
-    const ct = audio.currentTime;
+    const ct = now();
+    if (pendingSwap && quiet(ct)) swapNow(ct);
     while (idx + 1 < marks.length && marks[idx + 1].t <= ct) idx++;
     while (idx >= 0 && marks[idx].t > ct) idx--;
     let op = 0;
-    if (idx >= 0) {
+    if (idx >= 0 && !hidden) {
       const m = marks[idx], el = ct - m.t;
       const fi = Math.min(1, el / lerp(DISPLAY.fadeIn, m.p));
       const fo = Math.max(0, 1 - Math.max(0, el - DISPLAY.hold) / DISPLAY.fadeOut);
@@ -27,6 +38,33 @@ export function createStage({ audio, word, tapHint }) {
     const s = op.toFixed(3);
     if (s !== lastOpacity) { word.style.opacity = s; lastOpacity = s; }
     rafId = requestAnimationFrame(frame);
+  }
+
+  function release(url) {
+    if (url && url.startsWith("blob:") && url !== SILENT_WAV) URL.revokeObjectURL(url);
+  }
+
+  function swapNow(ct) {
+    const s = pendingSwap;
+    pendingSwap = null;
+    const old = audio.src, at = Math.max(0, ct - s.offset);
+    marks = s.marks;
+    offset = s.offset;
+    idx = -1;
+    audio.src = s.url;
+    const fail = () => { audio.removeEventListener("loadedmetadata", seek); s.done(); };  // nie hängen bleiben
+    const seek = () => {
+      audio.removeEventListener("loadedmetadata", seek);
+      audio.removeEventListener("error", fail);
+      audio.currentTime = at;
+      const p = audio.play();
+      api.frames();
+      Promise.resolve(p).then(() => { tapHint.hidden = true; }, () => { tapHint.hidden = false; }).then(s.done);
+    };
+    audio.addEventListener("loadedmetadata", seek);
+    audio.addEventListener("error", fail, { once: true });
+    audio.load();
+    release(old);
   }
 
   const api = {
@@ -39,13 +77,23 @@ export function createStage({ audio, word, tapHint }) {
 
     play(url, sessionMarks, meta) {
       marks = sessionMarks;
+      offset = 0;
       idx = -1;
       audio.src = url;
       if ("mediaSession" in navigator && typeof MediaMetadata !== "undefined") {
         navigator.mediaSession.metadata = new MediaMetadata(meta);
-        try { navigator.mediaSession.setActionHandler("nexttrack", api.skip); } catch (e) { /* egal */ }
       }
       api.resume();
+    },
+
+    // Neues Stück ab Sitzungszeit `from`; umgeschaltet wird, sobald gerade kein Wort klingt.
+    swap(url, sessionMarks, from) {
+      return new Promise(done => {
+        if (pendingSwap) { release(pendingSwap.url); pendingSwap.done(); }
+        pendingSwap = { url, marks: sessionMarks, offset: from, done };
+        if (marks && quiet(now())) swapNow(now());
+        api.frames();
+      });
     },
 
     resume() {
@@ -57,26 +105,25 @@ export function createStage({ audio, word, tapHint }) {
     frames() { if (!rafId && marks) rafId = requestAnimationFrame(frame); },
 
     get paused() { return audio.paused; },
+    get time() { return marks ? now() : 0; },
 
-    skip() {
-      if (!marks) return;
-      const ct = audio.currentTime;
-      const next = marks.find(m => m.t - DISPLAY.skipLead > ct + 0.05);
-      if (next) audio.currentTime = next.t - DISPLAY.skipLead;
-    },
+    // Wortanzeige aus (Bedienfeld offen); der Ton läuft weiter.
+    set hideWord(v) { hidden = v; },
 
     stop() {
       marks = null;
+      if (pendingSwap) { release(pendingSwap.url); pendingSwap.done(); pendingSwap = null; }
       if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
       const old = audio.src;
       audio.pause();
       audio.removeAttribute("src");
       audio.load();
-      if (old && old.startsWith("blob:") && old !== SILENT_WAV) URL.revokeObjectURL(old);
+      release(old);
       word.classList.remove("night");
       word.style.opacity = "0";
       word.textContent = "";
       lastOpacity = "";
+      hidden = false;
       tapHint.hidden = true;
     },
 

@@ -1,23 +1,26 @@
-import { AMBIENT, LONG_PRESS_MS } from "./config.js";
+import { AMBIENT, SESSION, CONTROLS } from "./config.js";
 import { TEXT, LANGS, pickLang } from "./i18n.js";
 import { storage } from "./storage.js";
-import { onsets, maxWordsPerSession } from "./schedule.js";
+import { onsets, replan } from "./schedule.js";
 import { freshDeck, validDeck, draw } from "./deck.js";
 import { mixSession } from "./mix.js";
 import { loadBundle, outRate, pcm, loadFile, filePcmFor } from "./clips.js";
 import { makeLoop } from "./ambient.js";
 import { createStage } from "./stage.js";
+import { createWheel } from "./wheel.js";
 import { registerOffline, keepOffline } from "./offline.js";
 import { preview, stopPreview } from "./preview.js";
 
 const $ = id => document.getElementById(id);
 const ui = {
   start: $("start"), stage: $("stage"), status: $("status"), lang: $("lang"),
-  sounds: $("sounds"), level: $("level"), levelField: $("level-field"),
+  hold: $("hold"), holdRing: $("hold-ring"), holdHint: $("hold-hint"), panel: $("panel"),
+  left: $("left-n"), panelStatus: $("panel-status"),
 };
 const stage = createStage({ audio: $("player"), word: $("word"), tapHint: $("tapplay") });
 
 // Phasen: start -> building -> playing -> night -> done (-> start)
+// Während „playing“ ist das Bedienfeld gesperrt, bis man gedrückt hält.
 let phase = "start";
 let lang = null;
 const clipSet = () => `${lang}-${voice}`;  // web/clips/<set>.json, nur die gewählte Stimme wird geladen
@@ -28,6 +31,7 @@ const KEYS = {
   voice: "ew-voice",
   sound: "ew-sound",
   level: "ew-level",
+  minutes: "ew-minutes",
   legacyNoise: "ew-noise",
   deck: l => (l === "de" ? "ew-deck" : `ew-deck-${l}`),
 };
@@ -48,6 +52,9 @@ const VOICES = ["f", "m"];
 let voice = storage.get(KEYS.voice);
 if (!VOICES.includes(voice)) voice = VOICES[0];
 const soundSetting = () => (sound === "off" ? null : { kind: sound, db: level });
+const M = SESSION.minutes;
+let minutes = Number(storage.get(KEYS.minutes));
+if (!(minutes >= M.min && minutes <= M.max && minutes % M.step === 0)) minutes = M.default;
 
 function loadDeck(words) {
   const d = storage.getJSON(KEYS.deck(lang));
@@ -55,19 +62,9 @@ function loadDeck(words) {
 }
 
 // ---------- Sitzung ----------
-async function buildSession(minutes, set) {
-  const durationS = minutes * 60;
-  const marks = onsets(durationS);
-  const bundle = await loadBundle(set);
-  const all = Object.keys(bundle);
-  const { words, deck } = draw(loadDeck(all), all, marks.length);
-  marks.forEach((m, i) => { m.w = words[i]; });
-  const bed = soundSetting();
-  const [rate, clips, loop] = await Promise.all([
-    outRate(set), Promise.all(words.map(w => pcm(set, w))), bed && bedLoop(set, bed.kind)]);
-  const wav = mixSession({ durationS, marks, clips, rate, sound: bed && { ...bed, loop } });
-  return { url: URL.createObjectURL(new Blob([wav], { type: "audio/wav" })), marks, deck };
-}
+// Eine Sitzung: Plan (Wortanfänge mit Wort), Dauer, Hintergrund und ein fester Zufallswert für
+// den Hintergrund. Änderungen mischen den Rest ab der aktuellen Stelle neu (stage.swap).
+let session = null;  // { set, lang, durationS, marks, deck, seed, sound }
 
 // Aufnahme als Schleife in der Rate der Clips (null für prozedurale Klänge).
 const loops = new Map();
@@ -79,13 +76,111 @@ async function bedLoop(set, kind) {
   return loops.get(key);
 }
 
-// Dekodiert schon vorab die Wörter der längsten Sitzung, damit der Tap schnell ist.
+// Fehlende Wörter für neue Wortanfänge ziehen (Stapel bleibt über Nächte erhalten).
+async function fillWords(s) {
+  const need = s.marks.filter(m => !m.w);
+  if (!need.length) return;
+  const all = Object.keys(await loadBundle(s.set));
+  const { words, deck } = draw(s.deck, all, need.length);
+  need.forEach((m, i) => { m.w = words[i]; });
+  s.deck = deck;
+  storage.setJSON(KEYS.deck(s.lang), deck);
+}
+
+// WAV-URL der Sitzung ab Sitzungszeit fromS
+async function mix(s, fromS) {
+  const [rate, loop] = await Promise.all([outRate(s.set), s.sound && bedLoop(s.set, s.sound.kind)]);
+  const marks = s.marks.filter(m => m.t + SESSION.maxClip > fromS);
+  const clips = await Promise.all(marks.map(m => pcm(s.set, m.w)));
+  const blob = mixSession({ durationS: s.durationS, marks, clips, rate, seed: s.seed, fromS,
+    sound: s.sound && { ...s.sound, loop } });
+  return URL.createObjectURL(blob.slice(0, blob.size, "audio/wav"));
+}
+
+async function start() {
+  if (phase !== "start") return;
+  phase = "building";
+  stopPreview();
+  stage.unlock();  // iOS: noch im Tap
+  ui.start.hidden = true;
+  ui.stage.hidden = false;
+  showHoldHint();
+  const set = clipSet();
+  try {
+    const all = Object.keys(await loadBundle(set));
+    const s = { set, lang, durationS: minutes * 60, marks: onsets(minutes * 60),
+      deck: loadDeck(all), seed: (Math.random() * 2 ** 31) | 0, sound: soundSetting() };
+    await fillWords(s);
+    const url = await mix(s, 0);
+    if (phase !== "building") { URL.revokeObjectURL(url); return; }
+    session = s;
+    phase = "playing";
+    stage.play(url, s.marks, { title: TEXT[s.lang].title, artist: TEXT[s.lang].artist });
+  } catch (e) {
+    stage.stop();
+    showStart(TEXT[lang].fail);
+  }
+}
+
+// Änderungen während der Sitzung sammeln und den Rest neu mischen (nie zwei Mischungen zugleich).
+let remixing = null, remixAgain = false;
+async function remix() {
+  if (remixing) { remixAgain = true; return remixing; }
+  const s = session;
+  ui.panelStatus.textContent = TEXT[lang].adjusting;
+  remixing = (async () => {
+    try {
+      const from = Math.max(0, Math.floor(stage.time));
+      await fillWords(s);
+      const url = await mix(s, from);
+      if (session !== s || phase !== "playing") { URL.revokeObjectURL(url); return; }
+      await stage.swap(url, s.marks, from);
+    } catch (e) { /* alte Mischung läuft weiter */ }
+  })();
+  await remixing;
+  remixing = null;
+  if (remixAgain && session === s) { remixAgain = false; return remix(); }
+  ui.panelStatus.textContent = "";
+}
+
+function changeDuration(deltaMin) {
+  const s = session;
+  if (!s) return;
+  const now = stage.time - SESSION.lead;
+  const minS = Math.min(s.durationS, Math.ceil((now + CONTROLS.minLeftS) / 60) * 60);
+  const next = Math.min(M.max * 60, Math.max(minS, s.durationS + deltaMin * 60));
+  if (next === s.durationS) return;
+  // Schon gezogene, noch nicht gesprochene Wörter wandern auf die neuen Wortanfänge
+  const keep = stage.time + CONTROLS.keepS;
+  const spare = s.marks.filter(m => m.t >= keep).map(m => m.w);
+  s.durationS = next;
+  s.marks = replan(s.marks, next, keep);
+  s.marks.filter(m => !m.w).forEach((m, i) => { if (i < spare.length) m.w = spare[i]; });
+  renderLeft();
+  remix();
+}
+
+let soundTimer = 0;
+function changeSound(immediate) {
+  if (!session) return;
+  session.sound = soundSetting();
+  clearTimeout(soundTimer);
+  if (immediate) remix(); else soundTimer = setTimeout(remix, CONTROLS.remixDelayMs);
+}
+
+function renderLeft() {
+  if (!session) return;
+  const left = SESSION.lead + session.durationS - stage.time;
+  ui.left.textContent = String(Math.max(0, Math.ceil(left / 60)));
+}
+
+// Dekodiert vorab die Wörter der ersten Minuten, damit der Start schnell ist.
 async function prewarm(set) {
   try {
     const bundle = await loadBundle(set);
     if (set !== clipSet()) return;
     const all = Object.keys(bundle);
-    const { words } = draw(loadDeck(all), all, maxWordsPerSession());
+    const { words } = draw(loadDeck(all), all, onsets(10 * 60).length);
     for (let i = 0; i < words.length && set === clipSet(); i += 4) {
       await Promise.all(words.slice(i, i + 4).map(w => pcm(set, w)));
     }
@@ -106,24 +201,11 @@ function prepareSound() {
   if (url) loadFile(url).then(() => keepOffline(url, () => AMBIENT.files[sound] === url), () => {});
 }
 
-async function start(minutes) {
-  if (phase !== "start") return;
-  phase = "building";
-  stopPreview();
-  stage.unlock();  // iOS: noch im Tap
-  ui.start.hidden = true;
-  ui.stage.hidden = false;
-  const forLang = lang;
-  try {
-    const s = await buildSession(minutes, clipSet());
-    if (phase !== "building") { URL.revokeObjectURL(s.url); return; }
-    storage.setJSON(KEYS.deck(forLang), s.deck);
-    phase = "playing";
-    stage.play(s.url, s.marks, { title: TEXT[forLang].title, artist: TEXT[forLang].artist });
-  } catch (e) {
-    stage.stop();
-    showStart(TEXT[lang].fail);
-  }
+function endSession() {
+  lockPanel();
+  session = null;
+  stage.stop();
+  showStart();
 }
 
 function showStart(message = "") {
@@ -131,6 +213,7 @@ function showStart(message = "") {
   ui.stage.hidden = true;
   ui.start.hidden = false;
   ui.status.textContent = message;
+  wheel.recenter();
 }
 
 // ---------- Sprache ----------
@@ -148,6 +231,7 @@ function setLang(code, remember) {
   document.querySelectorAll("[data-lang-block]").forEach(el => { el.hidden = el.dataset.langBlock !== code; });
   ui.lang.value = code;
   renderSounds();
+  wheel.setUnit(t.minutes);
   ui.status.textContent = "";
   prepare();
 }
@@ -164,7 +248,7 @@ function renderLangSwitch() {
   ui.lang.addEventListener("change", () => { if (ui.lang.value !== lang) setLang(ui.lang.value, true); });
 }
 
-// ---------- Bedienung ----------
+// ---------- Bedienung Startseite ----------
 function renderVoice() {
   document.querySelectorAll("[data-voice]").forEach(b =>
     b.setAttribute("aria-checked", String(b.dataset.voice === voice)));
@@ -176,74 +260,147 @@ document.querySelectorAll("[data-voice]").forEach(b => b.addEventListener("click
   renderVoice();
   prepare();
 }));
-// Hintergrund: Klang und Lautstärke getrennt; Knöpfe aus AMBIENT.sounds, Texte sound_<name>
+
+// Hintergrund: Klang und Lautstärke getrennt; Knöpfe aus AMBIENT.sounds, Texte sound_<name>.
+// Zwei Sätze Bedienelemente (Startseite, Bedienfeld) mit demselben Zustand.
 const SOUND_ICONS = {
   off: '<path d="M5 12h14" stroke-linecap="round"/>',
   brown: '<path d="M3 12h2l1.5-4 2 9 2-11 2 12 2-9 1.5 5 1-2h3" stroke-linecap="round" stroke-linejoin="round"/>',
   rain: '<path d="M7 4l-2 5M13 4l-2 5M19 4l-2 5M10 12l-2 5M16 12l-2 5M7 17l-1 3M13 17l-1 3" stroke-linecap="round"/>',
   waves: '<path d="M2 10c2.5 0 2.5-3 5-3s2.5 3 5 3 2.5-3 5-3 2.5 3 5 3M2 16c2.5 0 2.5-3 5-3s2.5 3 5 3 2.5-3 5-3 2.5 3 5 3" stroke-linecap="round"/>',
 };
+const live = el => !!el.closest("#panel");  // im Bedienfeld: neu mischen statt Hörprobe
 function renderSounds() {
-  if (!ui.sounds.children.length) {
-    for (const kind of AMBIENT.sounds) {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.setAttribute("role", "radio");
-      b.dataset.sound = kind;
-      b.innerHTML = `<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4">${SOUND_ICONS[kind] || ""}</svg><span></span>`;
-      b.addEventListener("click", () => {
-        sound = kind;
-        storage.set(KEYS.sound, sound);
-        renderSounds();
-        prepareSound();
-        preview({ kind: sound, db: level });
-      });
-      ui.sounds.appendChild(b);
+  for (const box of document.querySelectorAll(".sounds")) {
+    if (!box.children.length) {
+      for (const kind of AMBIENT.sounds) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.setAttribute("role", "radio");
+        b.dataset.sound = kind;
+        b.innerHTML = `<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4">${SOUND_ICONS[kind] || ""}</svg><span></span>`;
+        b.addEventListener("click", () => {
+          if (kind === sound) return;
+          sound = kind;
+          storage.set(KEYS.sound, sound);
+          renderSounds();
+          prepareSound();
+          if (live(b)) changeSound(true); else preview({ kind: sound, db: level });
+        });
+        box.appendChild(b);
+      }
+    }
+    for (const b of box.children) {
+      b.setAttribute("aria-checked", String(b.dataset.sound === sound));
+      if (lang) b.querySelector("span").textContent = TEXT[lang][`sound_${b.dataset.sound}`];
     }
   }
-  for (const b of ui.sounds.children) {
-    b.setAttribute("aria-checked", String(b.dataset.sound === sound));
-    if (lang) b.querySelector("span").textContent = TEXT[lang][`sound_${b.dataset.sound}`];
+  for (const input of document.querySelectorAll("input.level")) {
+    input.closest(".level-field").classList.toggle("off", sound === "off");
+    input.disabled = sound === "off";
+    input.value = String(level);
+    input.style.setProperty("--fill", `${(100 * (level - LEVEL_MIN)) / (LEVEL_MAX - LEVEL_MIN)}%`);
   }
-  ui.levelField.classList.toggle("off", sound === "off");
-  ui.level.disabled = sound === "off";
-  ui.level.value = String(level);
-  ui.level.style.setProperty("--fill", `${(100 * (level - LEVEL_MIN)) / (LEVEL_MAX - LEVEL_MIN)}%`);
 }
-Object.assign(ui.level, { min: LEVEL_MIN, max: LEVEL_MAX, step: 1 });
-ui.level.addEventListener("input", () => {
-  level = Number(ui.level.value);
-  storage.set(KEYS.level, String(level));
-  renderSounds();
-  preview({ kind: sound, db: level });
-});
-document.querySelectorAll("[data-min]").forEach(b =>
-  b.addEventListener("click", () => start(Number(b.dataset.min))));
+for (const input of document.querySelectorAll("input.level")) {
+  Object.assign(input, { min: LEVEL_MIN, max: LEVEL_MAX, step: 1 });
+  input.addEventListener("input", () => {
+    level = Number(input.value);
+    storage.set(KEYS.level, String(level));
+    renderSounds();
+    if (live(input)) changeSound(false); else preview({ kind: sound, db: level });
+  });
+}
 
-// Tippen: nächstes Wort (oder abspielen, falls blockiert). Lange drücken: beenden.
-let pressTimer = 0, longPress = false;
-ui.stage.addEventListener("pointerdown", () => {
-  longPress = false;
-  clearTimeout(pressTimer);
-  pressTimer = setTimeout(() => {
-    longPress = true;
-    if (phase === "playing" || phase === "building") { stage.stop(); showStart(); }
-  }, LONG_PRESS_MS);
+const wheel = createWheel($("wheel"), {
+  min: M.min, max: M.max, step: M.step, value: minutes,
+  onChange: v => { minutes = v; storage.set(KEYS.minutes, String(v)); if (lang) wheel.setUnit(TEXT[lang].minutes); },
 });
-ui.stage.addEventListener("pointerup", () => clearTimeout(pressTimer));
-ui.stage.addEventListener("pointercancel", () => clearTimeout(pressTimer));
-ui.stage.addEventListener("click", () => {
-  if (longPress) return;
-  if (phase === "playing") {
-    if (stage.paused) stage.resume(); else stage.skip();
-  } else if (phase === "done") {
-    showStart();
+$("go").addEventListener("click", start);
+
+// ---------- Bedienung während der Sitzung ----------
+// Kurzes Tippen bewirkt nichts (außer Abspielen, falls der Browser es blockiert hat).
+// Gedrückt halten: Ring füllt sich, dann öffnet das Bedienfeld; es sperrt sich nach Ruhe wieder.
+let holdStart = 0, holdRaf = 0, holdProgress = 0, relockTimer = 0;
+
+function setRing(p) {
+  holdProgress = p;
+  ui.holdRing.style.strokeDashoffset = String(100 - 100 * p);
+}
+function holdFrame() {
+  holdRaf = 0;
+  if (holdStart) {
+    const p = Math.min(1, (performance.now() - holdStart) / CONTROLS.holdMs);
+    setRing(p);
+    if (p >= 1) { holdStart = 0; ui.hold.hidden = true; openPanel(); return; }
+  } else {
+    setRing(Math.max(0, holdProgress - 0.06));  // loslassen: Ring läuft zurück
+    if (holdProgress <= 0) { ui.hold.hidden = true; if (ui.panel.hidden) stage.hideWord = false; return; }
   }
+  holdRaf = requestAnimationFrame(holdFrame);
+}
+function holdDown() {
+  if (phase !== "playing" || !ui.panel.hidden) return;
+  holdStart = performance.now();
+  ui.hold.hidden = false;
+  stage.hideWord = true;
+  if (!holdRaf) holdRaf = requestAnimationFrame(holdFrame);
+}
+function holdUp() {
+  if (!holdStart) return;
+  holdStart = 0;
+  if (stage.paused && phase === "playing") stage.resume();  // Wiedergabe war blockiert
+}
+
+let leftTimer = 0;
+function openPanel() {
+  if (navigator.vibrate) navigator.vibrate(15);
+  stage.hideWord = true;
+  ui.panel.hidden = false;
+  ui.stage.classList.add("unlocked");
+  ui.holdHint.hidden = true;
+  renderLeft();
+  leftTimer = setInterval(renderLeft, 5000);
+  touchPanel();
+}
+function lockPanel() {
+  clearTimeout(relockTimer);
+  clearInterval(leftTimer);
+  ui.panel.hidden = true;
+  ui.stage.classList.remove("unlocked");
+  stage.hideWord = false;
+}
+function touchPanel() {
+  clearTimeout(relockTimer);
+  relockTimer = setTimeout(lockPanel, CONTROLS.relockMs);
+}
+
+function showHoldHint() {
+  ui.holdHint.hidden = false;
+  ui.holdHint.classList.remove("fade");
+  setTimeout(() => ui.holdHint.classList.add("fade"), 5000);
+}
+
+ui.stage.addEventListener("pointerdown", e => {
+  if (ui.panel.contains(e.target)) { touchPanel(); return; }
+  holdDown();
+});
+for (const ev of ["pointerup", "pointercancel", "pointerleave"]) ui.stage.addEventListener(ev, holdUp);
+ui.panel.addEventListener("input", touchPanel);
+ui.panel.addEventListener("keydown", e => { touchPanel(); if (e.key === "Escape") lockPanel(); });
+ui.stage.addEventListener("click", e => {
+  if (phase === "done" && !ui.panel.contains(e.target)) showStart();
 });
 ui.stage.addEventListener("contextmenu", e => e.preventDefault());
+document.querySelectorAll("[data-adj]").forEach(b =>
+  b.addEventListener("click", () => changeDuration(Number(b.dataset.adj))));
+$("resume").addEventListener("click", lockPanel);
+$("end").addEventListener("click", endSession);
 
 $("player").addEventListener("ended", () => {
   if (phase !== "playing") return;
+  lockPanel();
+  session = null;
   phase = "night";
   stage.goodNight(TEXT[lang].night, () => { if (phase === "night") phase = "done"; });
 });

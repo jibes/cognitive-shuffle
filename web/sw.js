@@ -21,6 +21,7 @@ const SHELL = [
   "js/mix.js",
   "js/ambient.js",
   "js/preview.js",
+  "js/wheel.js",
   "js/wav.js",
   "js/clips.js",
   "js/stage.js",

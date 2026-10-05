@@ -49,11 +49,11 @@
       <span class="label" id="sound-label" data-t="sound"></span>
       <div class="seg sounds" role="radiogroup" aria-labelledby="sound-label" id="sounds"></div>
     </div>
-    <div class="field" id="level-field">
+    <div class="field level-field" id="level-field">
       <label class="label" for="level" data-t="volume"></label>
       <div class="slider">
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
-        <input type="range" id="level">
+        <input type="range" id="level" class="level">
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M15.5 9.2a4 4 0 010 5.6M18 6.8a7.5 7.5 0 010 10.4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
       </div>
     </div>
@@ -61,11 +61,9 @@
 
   <section class="times">
     <span class="label" id="times-label" data-t="length"></span>
-    <div class="row" role="group" aria-labelledby="times-label">
-      <button type="button" data-min="10" data-t-label="min10"><span class="n">10</span><span class="u" data-t="minutes"></span></button>
-      <button type="button" data-min="15" data-t-label="min15"><span class="n">15</span><span class="u" data-t="minutes"></span></button>
-      <button type="button" data-min="25" data-t-label="min25"><span class="n">25</span><span class="u" data-t="minutes"></span></button>
-    </div>
+    <div class="wheel" id="wheel" aria-labelledby="times-label"><div class="track"></div></div>
+    <span class="unit" data-t="minutes"></span>
+    <button type="button" class="go" id="go" data-t="start"></button>
   </section>
   <p class="status" id="status" aria-live="polite"></p>
 </main>
@@ -73,6 +71,44 @@
 <div id="stage" hidden>
   <div id="word" aria-live="off"></div>
   <div id="tapplay" hidden data-t="tap"></div>
+  <p id="hold-hint" class="hold-hint" data-t="holdHint"></p>
+
+  <!-- Gedrückt halten: Ring füllt sich um das Stoppsymbol, dann öffnet das Bedienfeld -->
+  <div id="hold" class="hold" hidden aria-hidden="true">
+    <svg viewBox="0 0 120 120" width="120" height="120">
+      <circle cx="60" cy="60" r="54" class="ring-bg"/>
+      <circle cx="60" cy="60" r="54" class="ring" id="hold-ring" pathLength="100"/>
+      <rect x="47" y="47" width="26" height="26" rx="4" class="stop"/>
+    </svg>
+  </div>
+
+  <div id="panel" class="panel" hidden role="dialog" aria-labelledby="panel-time">
+    <div class="field">
+      <span class="label" data-t="remaining"></span>
+      <div class="remain">
+        <button type="button" class="adj" data-adj="-5" data-t-label="less5">−5</button>
+        <div class="left" id="panel-time"><span class="n" id="left-n"></span><span class="u" data-t="minutes"></span></div>
+        <button type="button" class="adj" data-adj="5" data-t-label="more5">+5</button>
+      </div>
+    </div>
+    <div class="field">
+      <span class="label" id="sound-live-label" data-t="sound"></span>
+      <div class="seg sounds" role="radiogroup" aria-labelledby="sound-live-label" id="sounds-live"></div>
+    </div>
+    <div class="field level-field" id="level-live-field">
+      <label class="label" for="level-live" data-t="volume"></label>
+      <div class="slider">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+        <input type="range" id="level-live" class="level">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M15.5 9.2a4 4 0 010 5.6M18 6.8a7.5 7.5 0 010 10.4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      </div>
+    </div>
+    <p class="panel-status" id="panel-status" aria-live="polite"></p>
+    <div class="actions">
+      <button type="button" id="end" class="end" data-t="end"></button>
+      <button type="button" id="resume" class="resume" data-t="resume"></button>
+    </div>
+  </div>
 </div>
 
 <dialog id="info" aria-labelledby="info-title">
@@ -87,18 +123,18 @@
 
       <h3>So geht’s</h3>
       <ol>
-        <li>Stimme (weiblich, männlich) und Hintergrund (Stille, Rauschen, Regen, Wellen) wählen, Lautstärke einstellen – beim Wählen gibt es eine kurze Hörprobe. Dann auf eine Dauer tippen.</li>
+        <li>Stimme (weiblich, männlich) und Hintergrund (Stille, Rauschen, Regen, Wellen) wählen, Lautstärke einstellen – beim Wählen gibt es eine kurze Hörprobe. Dauer am Rad einstellen (5 bis 120 Minuten) und starten.</li>
         <li>Handy weglegen, Bildschirm sperren – die Wörter laufen weiter.</li>
         <li>Zu jedem Wort ein Bild ausmalen: Farbe, Form, wo es liegt. Kommt kein Bild, einfach das Wort im Kopf wiederholen. Nichts festhalten; beim nächsten Wort weiter.</li>
       </ol>
-      <p><strong>Tippen</strong> bei eingeschaltetem Bildschirm: nächstes Wort. <strong>Lange drücken</strong>: beenden.</p>
+      <p><strong>Gedrückt halten</strong>, bis sich der Ring um das Stoppsymbol gefüllt hat: Hintergrund und Lautstärke ändern, Zeit verlängern oder kürzen, beenden. Ohne Berührung schließt sich das Feld nach einigen Sekunden wieder. Kurzes Tippen bewirkt nichts – so stört eine zufällige Berührung im Bett nicht.</p>
       <p>Brave unter Android: in den Einstellungen die Hintergrundwiedergabe erlauben. Als App installieren: im Browsermenü „App installieren“ bzw. in Safari „Zum Home-Bildschirm“. Nach einem Besuch mit Netz läuft die App auch offline.</p>
 
       <h3>Wissenschaftlicher Hintergrund</h3>
       <p>Grübeln und kreisende Gedanken halten den Kopf vor dem Schlafen wach; das gilt als ein Kernmechanismus von Einschlafproblemen (Harvey 2002).</p>
       <p>Der Kognitionswissenschaftler Luc Beaudoin (Simon Fraser University) schlägt vor, das Arbeitsgedächtnis mit zufälligen, neutralen Vorstellungsbildern zu beschäftigen („serial diverse imagining“). Die Bilder sind zu harmlos und zu unzusammenhängend, um Grübeln zu nähren, und ähneln dem bunten Durcheinander kurz vor dem Einschlafen. Nach seiner Hypothese deutet das Gehirn das als Zeichen, dass es sicher ist abzuschalten.</p>
       <p>In einer Studie mit 154 Studierenden, die über Grübeln vor dem Schlafen klagten (Beaudoin u. a. 2016), hörten Teilnehmende per App Wörter im Abstand von 8 Sekunden. Nach einer Woche bis einem Monat waren Unruhe vor dem Schlafen, Anstrengung beim Einschlafen und Schlafqualität deutlich besser als zu Beginn – ebenso gut wie mit strukturiertem Problemlösen am Abend, aber im Bett anwendbar. Die Belege sind vorläufig: wenige Studien, keine unbehandelte Vergleichsgruppe, junge und meist weibliche Teilnehmende, Ergebnisse als Kongressbeitrag.</p>
-      <p>Diese App beginnt wie die Studie mit 8 Sekunden und verlängert die Pausen dann auf 20 Sekunden, damit sie zum Ende hin ausklingt.</p>
+      <p>Diese App beginnt wie die Studie mit 8 Sekunden und verlängert die Pausen über höchstens 20 Minuten auf 15 Sekunden, während die Stimme leiser wird; danach bleibt es so, bis die Sitzung ausklingt.</p>
 
       <h3>Hinweis</h3>
       <p>Kein Medizinprodukt. Bei Schlafproblemen über mehrere Wochen ärztlichen Rat suchen; die am besten belegte Behandlung ist die kognitive Verhaltenstherapie für Insomnie (KVT-I, Riemann u. a. 2023).</p>
@@ -125,18 +161,18 @@
 
       <h3>How to use</h3>
       <ol>
-        <li>Choose a voice (female, male) and a background (silence, noise, rain, waves) and set its volume – you hear a short preview while choosing. Then tap a length.</li>
+        <li>Choose a voice (female, male) and a background (silence, noise, rain, waves) and set its volume – you hear a short preview while choosing. Set the length on the wheel (5 to 120 minutes) and start.</li>
         <li>Put the phone down and lock the screen – the words keep playing.</li>
         <li>Picture each word: its colour, shape, where it is. If no image comes, just repeat the word in your head. Don’t hold on; move on with the next word.</li>
       </ol>
-      <p><strong>Tap</strong> while the screen is on: next word. <strong>Long press</strong>: stop.</p>
+      <p><strong>Press and hold</strong> until the ring around the stop symbol is full: change background and volume, add or remove time, or stop. Without touch the panel closes again after a few seconds. A short tap does nothing – so an accidental touch in bed does no harm.</p>
       <p>Brave on Android: allow background playback in settings. To install as an app: “Install app” in the browser menu, or “Add to Home Screen” in Safari. After one visit online it also works offline.</p>
 
       <h3>Scientific background</h3>
       <p>Worry and racing thoughts keep the mind awake at bedtime; this is considered a core mechanism of trouble falling asleep (Harvey 2002).</p>
       <p>Cognitive scientist Luc Beaudoin (Simon Fraser University) proposes occupying working memory with random, neutral mental images (“serial diverse imagining”). The images are too harmless and too unconnected to feed worry, and they resemble the jumble of imagery just before sleep. His hypothesis is that the brain reads this as a sign that it is safe to switch off.</p>
       <p>In a study of 154 university students who reported worrying at bedtime (Beaudoin et al. 2016), participants heard words from an app at 8-second intervals. After one week to one month, pre-sleep arousal, sleep effort and sleep quality were clearly better than at the start – as good as with structured problem-solving in the evening, but usable in bed. The evidence is preliminary: few studies, no untreated control group, young and mostly female participants, results presented as a conference abstract.</p>
-      <p>Like the study, this app starts at 8 seconds, then stretches the pauses to 20 seconds so it fades out towards the end.</p>
+      <p>Like the study, this app starts at 8 seconds, then stretches the pauses to 15 seconds over at most 20 minutes while the voice gets softer; after that it stays the same until the session fades out.</p>
 
       <h3>Note</h3>
       <p>Not a medical device. If sleep problems last for several weeks, see a doctor; the best-supported treatment is cognitive behavioural therapy for insomnia (CBT-I, Riemann et al. 2023).</p>

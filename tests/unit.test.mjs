@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { onsets, maxWordsPerSession } from "../web/js/schedule.js";
+import { onsets, replan } from "../web/js/schedule.js";
 import { shuffle, freshDeck, validDeck, draw } from "../web/js/deck.js";
 import { mixSession } from "../web/js/mix.js";
 import { createWav } from "../web/js/wav.js";
@@ -16,15 +16,35 @@ const seeded = (seed = 1) => () => {
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 };
 
-test("onsets: Abstand wächst von 8 auf ~20 s und endet vor Sitzungsende", () => {
-  const d = 25 * 60, on = onsets(d);
-  assert.equal(on[0].t, SESSION.lead);
-  const gaps = on.slice(1).map((o, i) => o.t - on[i].t);
-  assert.equal(gaps[0], SESSION.gap[0]);
-  assert.ok(gaps.at(-1) > 19 && gaps.at(-1) <= SESSION.gap[1]);
-  assert.ok(gaps.every((g, i) => i === 0 || g >= gaps[i - 1]));
-  assert.ok(on.at(-1).t + SESSION.maxClip <= SESSION.lead + d);
-  assert.equal(maxWordsPerSession(), on.length);
+test("onsets: Abstand wächst in höchstens 20 min von 8 auf 15 s, dann gleich; endet vor Sitzungsende", () => {
+  for (const min of [10, 25, 120]) {
+    const d = min * 60, on = onsets(d);
+    assert.equal(on[0].t, SESSION.lead);
+    const gaps = on.slice(1).map((o, i) => o.t - on[i].t);
+    assert.equal(gaps[0], SESSION.gap[0]);
+    assert.ok(gaps.every((g, i) => i === 0 || g >= gaps[i - 1] - 1e-9), `${min}: monoton`);
+    assert.ok(Math.max(...gaps) <= SESSION.gap[1] + 1e-9, `${min}: höchstens 15 s`);
+    assert.ok(on.at(-1).t + SESSION.maxClip <= SESSION.lead + d);
+    const atRamp = on.find(o => o.t >= SESSION.lead + Math.min(SESSION.ramp, d) - 1e-9);
+    if (atRamp) assert.equal(atRamp.p, 1, `${min}: nach der Steigerung p = 1`);
+  }
+  const long = onsets(120 * 60);
+  assert.ok(long.length > 450 && long.length < 520, `120 min: ${long.length} Wörter`);
+});
+
+test("replan: Wörter vor keepUntil bleiben, danach stetig weiter bis zur neuen Dauer", () => {
+  const marks = onsets(10 * 60).map((m, i) => ({ ...m, w: `w${i}` }));
+  const keep = 200, next = replan(marks, 15 * 60, keep);
+  const kept = marks.filter(m => m.t < keep);
+  assert.deepEqual(next.slice(0, kept.length), kept);
+  const rest = next.slice(kept.length);
+  assert.ok(rest.every(m => !m.w));
+  const gaps = next.slice(1).map((o, i) => o.t - next[i].t);
+  assert.ok(gaps.every((g, i) => i === 0 || g >= gaps[i - 1] - 1e-9), "Abstände wachsen stetig weiter");
+  assert.ok(next.at(-1).t > marks.at(-1).t + 200, "reicht bis zur neuen Dauer");
+  assert.ok(next.at(-1).t + SESSION.maxClip <= SESSION.lead + 15 * 60);
+  const shorter = replan(marks, 5 * 60, keep);
+  assert.ok(shorter.at(-1).t + SESSION.maxClip <= SESSION.lead + 5 * 60, "kürzer: endet rechtzeitig");
 });
 
 test("deck: keine Wiederholung bis Liste durch, kein Doppel an der Nahtstelle", () => {
@@ -60,11 +80,11 @@ test("wav: gültiger Kopf", () => {
   assert.equal(pcm.length, 100);
 });
 
-function analyse(durationS, sound, rate = 16000) {
+async function analyse(durationS, sound, rate = 16000) {
   const marks = onsets(durationS);
   const clip = new Float32Array(rate).map((_, i) => 0.708 * Math.sin(i / 3));  // −3 dBFS
-  const buf = mixSession({ durationS, marks, clips: marks.map(() => clip), rate, sound, rng: seeded(7) });
-  const s = new Int16Array(buf, 44);
+  const blob = mixSession({ durationS, marks, clips: marks.map(() => clip), rate, sound, seed: 7 });
+  const s = new Int16Array(await blob.arrayBuffer(), 44);
   let peak = 0;
   for (const x of s) peak = Math.max(peak, Math.abs(x));
   const rms = (a, b) => {
@@ -75,10 +95,10 @@ function analyse(durationS, sound, rate = 16000) {
   return { s, rate, marks, peakDb: 20 * Math.log10(peak / 32768), rms };
 }
 
-test("mix: Länge, Spitze < 0 dBFS, Hintergrund im Pegel wie eingestellt (je Klang)", () => {
+test("mix: Länge, Spitze < 0 dBFS, Hintergrund im Pegel wie eingestellt (je Klang)", async () => {
   for (const kind of Object.keys(SOUNDS)) {
     for (const db of [AMBIENT.level.default, -35]) {
-      const r = analyse(300, { kind, db });
+      const r = await analyse(300, { kind, db });
       const want = db + AMBIENT.trim[kind], end = SESSION.lead + 300 + SESSION.tail;
       assert.equal(r.s.length, Math.ceil(end * r.rate));
       assert.ok(r.peakDb < -1, `${kind} ${db}: Spitze ${r.peakDb}`);
@@ -88,15 +108,15 @@ test("mix: Länge, Spitze < 0 dBFS, Hintergrund im Pegel wie eingestellt (je Kla
       assert.ok(r.rms(end - 1, end) < want - 30, `${kind}: Ende leise`);
     }
   }
-  const silent = analyse(60, null);
+  const silent = await analyse(60, null);
   assert.equal(silent.rms(4, 9), -Infinity);
 });
 
-test("mix: Hintergrund über lange Strecke im Pegel", () => {
+test("mix: Hintergrund über lange Strecke im Pegel", async () => {
   for (const kind of Object.keys(SOUNDS)) {
     const durationS = 400, rate = 8000;
-    const buf = mixSession({ durationS, marks: [], clips: [], rate, sound: { kind, db: -40 }, rng: seeded(11) });
-    const s = new Int16Array(buf, 44);
+    const blob = mixSession({ durationS, marks: [], clips: [], rate, sound: { kind, db: -40 }, seed: 11 });
+    const s = new Int16Array(await blob.arrayBuffer(), 44);
     let q = 0;
     for (let i = 10 * rate; i < 390 * rate; i++) q += s[i] * s[i];
     const level = 20 * Math.log10(Math.sqrt(q / (380 * rate)) / 32768), want = -40 + AMBIENT.trim[kind];
@@ -111,7 +131,7 @@ function fakeRecording(seconds, rate, rng = seeded(5)) {
   return x;
 }
 
-test("Schleife: Naht ohne Pegelsprung, Pegel wie eingestellt, Start zufällig", () => {
+test("Schleife: Naht ohne Pegelsprung, Pegel wie eingestellt, Start zufällig", async () => {
   const rate = 8000, loop = makeLoop(fakeRecording(30, rate), rate);
   const d = loop.data, win = rate / 4;
   const rms = (a, n) => { let q = 0; for (let i = 0; i < n; i++) { const v = d[(a + i) % d.length]; q += v * v; } return Math.sqrt(q / n); };
@@ -120,14 +140,14 @@ test("Schleife: Naht ohne Pegelsprung, Pegel wie eingestellt, Start zufällig", 
     const r = 20 * Math.log10(rms(a, win) / ref);
     assert.ok(Math.abs(r) < 1.5, `Naht: ${r.toFixed(1)} dB bei ${a}`);
   }
-  const mix = rng => new Int16Array(mixSession({ durationS: 120, marks: [], clips: [], rate,
-    sound: { kind: "rain", db: -40, loop }, rng }), 44);
-  const s = mix(seeded(2));
+  const mix = async seed => new Int16Array(await mixSession({ durationS: 120, marks: [], clips: [], rate,
+    sound: { kind: "rain", db: -40, loop }, seed }).arrayBuffer(), 44);
+  const s = await mix(2);
   let q = 0;
   for (let i = 10 * rate; i < 110 * rate; i++) q += s[i] * s[i];
   const level = 20 * Math.log10(Math.sqrt(q / (100 * rate)) / 32768), want = -40 + AMBIENT.trim.rain;
   assert.ok(Math.abs(level - want) < 0.5, `Pegel ${level.toFixed(2)} statt ${want}`);
-  assert.notDeepEqual(s.subarray(5 * rate, 5 * rate + 100), mix(seeded(3)).subarray(5 * rate, 5 * rate + 100), "Start zufällig");
+  assert.notDeepEqual(s.subarray(5 * rate, 5 * rate + 100), (await mix(3)).subarray(5 * rate, 5 * rate + 100), "Start zufällig");
 });
 
 test("ambient: jeder Klang hat Generator oder Aufnahme, Ausgleich und Text; Aufnahmen ≥ 48 kbit/s", async () => {
@@ -152,8 +172,24 @@ test("ambient: jeder Klang hat Generator oder Aufnahme, Ausgleich und Text; Aufn
   }
 });
 
-test("mix: Stimme wird leiser", () => {
-  const r = analyse(600, null);
+test("mix: ab Minute x neu gemischt = sample-genau gleich (nahtloses Umschalten)", async () => {
+  const rate = 8000, durationS = 300, marks = onsets(durationS);
+  const clips = marks.map(() => new Float32Array(rate).map((_, i) => 0.5 * Math.sin(i / 3)));
+  const rateLoop = makeLoop(fakeRecording(20, rate), rate);
+  for (const sound of [{ kind: "brown", db: -40 }, { kind: "rain", db: -40, loop: rateLoop }]) {
+    const full = new Int16Array(await mixSession({ durationS, marks, clips, rate, sound, seed: 4 }).arrayBuffer(), 44);
+    const fromS = 101.25, part = mixSession({ durationS, marks: marks.filter(m => m.t + 3 > fromS),
+      clips: clips.slice(marks.findIndex(m => m.t + 3 > fromS)), rate, sound, seed: 4, fromS });
+    const tail = new Int16Array(await part.arrayBuffer(), 44), o = fromS * rate;
+    assert.equal(tail.length, full.length - o);
+    let diff = 0;
+    for (let i = 0; i < tail.length; i++) diff = Math.max(diff, Math.abs(full[o + i] - tail[i]));
+    assert.equal(diff, 0, `${sound.kind}: Abweichung ${diff}`);
+  }
+});
+
+test("mix: Stimme wird leiser", async () => {
+  const r = await analyse(600, null);
   const level = m => r.rms(m.t, m.t + 1);
   assert.ok(level(r.marks[0]) - level(r.marks.at(-1)) > 6);
 });

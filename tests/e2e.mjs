@@ -42,8 +42,9 @@ async function page(locale, { blockFonts = true } = {}) {
 }
 
 async function session(p, sound, minutes) {
-  await p.click(`[data-sound=${sound}]`);
-  await p.click(`[data-min="${minutes}"]`);
+  await p.click(`#sounds [data-sound=${sound}]`);
+  await p.click(`#wheel [data-min="${minutes}"]`);
+  await p.click("#go");
   await p.waitForFunction(() => {
     const a = document.getElementById("player");
     return a.src.startsWith("blob:") && a.duration > 100;
@@ -74,8 +75,9 @@ for (const [locale, lang, night] of [["de-DE", "de", "Gute Nacht"], ["en-GB", "e
   check(w.length > 0 && op > 0.3, `${locale}: Wort sichtbar („${w}“, ${op})`);
   const before = await p.$eval("#player", a => a.currentTime);
   await p.click("#stage");
+  await p.waitForTimeout(300);
   const after = await p.$eval("#player", a => a.currentTime);
-  check(after > before + 4, `${locale}: Tippen springt (${before.toFixed(1)} → ${after.toFixed(1)} s)`);
+  check(after - before < 1 && await p.$eval("#panel", e => e.hidden), `${locale}: kurzes Tippen bewirkt nichts`);
   await p.$eval("#player", a => { a.currentTime = a.duration - 0.5; });
   await p.waitForTimeout(3000);
   check(await p.$eval("#word", e => e.textContent) === night, `${locale}: „${night}“ am Ende`);
@@ -98,8 +100,8 @@ for (const [locale, title, heading] of [["de-DE", "Einschlafwörter", "So geht�
 {
   const p = await page("de-DE");
   await p.selectOption("#lang", "en");
-  check(await p.getAttribute("[data-min='10']", "aria-label") === "10 minutes"
-    && await p.textContent("[data-sound=rain]") === "Rain", "Umschalter: Texte auf Englisch");
+  check(await p.textContent("#go") === "Start"
+    && await p.textContent("#sounds [data-sound=rain]") === "Rain", "Umschalter: Texte auf Englisch");
   await p.reload();
   check(await p.evaluate(() => document.documentElement.lang) === "en", "Umschalter: Wahl bleibt nach Neuladen");
   const r = await session(p, "off", 10);
@@ -133,22 +135,64 @@ for (const [locale, title, heading] of [["de-DE", "Einschlafwörter", "So geht�
 // Hintergrund: Klang und Lautstärke getrennt, beides gemerkt; Regen und Wellen spielen im Pegel
 {
   const p = await page("de-DE");
-  check(await p.getAttribute("[data-sound=brown]", "aria-checked") === "true", "Hintergrund: Rauschen vorgewählt");
-  await p.click("[data-sound=rain]");
+  check(await p.getAttribute("#sounds [data-sound=brown]", "aria-checked") === "true", "Hintergrund: Rauschen vorgewählt");
+  await p.click("#sounds [data-sound=rain]");
   await p.$eval("#level", e => { e.value = "-35"; e.dispatchEvent(new Event("input", { bubbles: true })); });
   await p.reload();
-  check(await p.getAttribute("[data-sound=rain]", "aria-checked") === "true"
+  check(await p.getAttribute("#sounds [data-sound=rain]", "aria-checked") === "true"
     && await p.$eval("#level", e => e.value) === "-35", "Hintergrund: Klang und Lautstärke bleiben nach Neuladen");
   const r = await session(p, "rain", 10);
   // Aufnahme schwankt kurzfristig, Start zufällig: Messfenster 2 s, daher grob
   check(!r.paused && Math.abs(r.noiseDb - (-35 - 6)) < 8, `Hintergrund: Regen ${r.noiseDb.toFixed(1)} dBFS`);
   await p.context().close();
   const q = await page("de-DE");
-  await q.click("[data-sound=off]");
+  await q.click("#sounds [data-sound=off]");
   check(await q.$eval("#level", e => e.disabled), "Hintergrund: Stille sperrt den Lautstärkeregler");
   const w = await session(q, "waves", 10);
   check(!w.paused && w.noiseDb < -35 && w.noiseDb > -75, `Hintergrund: Wellen ${w.noiseDb.toFixed(1)} dBFS`);
   await q.context().close();
+}
+
+// Dauer-Rad: Wahl bleibt; Halten öffnet das Bedienfeld, ±5 min und Klang mischen den Rest neu
+{
+  const p = await page("de-DE");
+  await p.click('#wheel [data-min="45"]');
+  await p.reload();
+  check(await p.$eval("#wheel", e => e.getAttribute("aria-valuenow")) === "45", "Rad: Dauer bleibt nach Neuladen");
+  await p.focus("#wheel");
+  await p.keyboard.press("ArrowLeft");
+  await p.keyboard.press("ArrowLeft");
+  check(await p.$eval("#wheel", e => e.getAttribute("aria-valuenow")) === "35", "Rad: Pfeiltasten in 5-min-Schritten");
+  await p.click('#wheel [data-min="10"]');
+  await p.click("#go");
+  await p.waitForFunction(() => document.getElementById("player").duration > 100, null, { timeout: 60000 });
+  await p.waitForTimeout(1000);
+  const hold = async ms => { await p.mouse.move(180, 300); await p.mouse.down(); await p.waitForTimeout(ms); await p.mouse.up(); };
+  await hold(500);
+  await p.waitForTimeout(600);
+  check(await p.$eval("#panel", e => e.hidden) && await p.$eval("#hold", e => e.hidden), "Halten: zu kurz öffnet nichts, Ring verschwindet");
+  await hold(1500);
+  check(!(await p.$eval("#panel", e => e.hidden)) && await p.textContent("#left-n") === "10", "Halten: Bedienfeld offen, Restzeit 10");
+  const swapped = () => p.waitForFunction(() => document.getElementById("panel-status").textContent === "", null, { timeout: 30000 });
+  await p.click('[data-adj="5"]');
+  await swapped();
+  const d15 = await p.$eval("#player", a => a.currentTime + a.duration);
+  check(await p.textContent("#left-n") === "15" && Math.abs(d15 - (2 + 900 + 30)) < 3,
+    `+5: Restzeit 15, Sitzung endet bei ${d15.toFixed(0)} s`);
+  await p.click('[data-adj="-5"]');
+  await p.click('[data-adj="-5"]');
+  await swapped();
+  check(await p.textContent("#left-n") === "5", "−5 zweimal: Restzeit 5");
+  await p.click("#sounds-live [data-sound=rain]");
+  await swapped();
+  check(!(await p.$eval("#player", a => a.paused)) && await p.getAttribute("#sounds [data-sound=rain]", "aria-checked") === "true",
+    "Klang im Bedienfeld: spielt weiter, Startseite übernimmt die Wahl");
+  await p.click("#resume");
+  check(await p.$eval("#panel", e => e.hidden), "Weiter: Bedienfeld zu");
+  await hold(1500);
+  await p.click("#end");
+  check(!(await p.$eval("#start", e => e.hidden)) && await p.$eval("#player", a => a.paused), "Beenden: zurück zur Startseite, Ton aus");
+  await p.context().close();
 }
 
 // Alte Einstellung (ein Regler „mittel“) wird übernommen: Rauschen, -35 dBFS
@@ -156,7 +200,7 @@ for (const [locale, title, heading] of [["de-DE", "Einschlafwörter", "So geht�
   const p = await page("de-DE");
   await p.evaluate(() => { localStorage.clear(); localStorage.setItem("ew-noise", "medium"); });
   await p.reload();
-  check(await p.getAttribute("[data-sound=brown]", "aria-checked") === "true"
+  check(await p.getAttribute("#sounds [data-sound=brown]", "aria-checked") === "true"
     && await p.$eval("#level", e => e.value) === "-35", "Alte Einstellung „mittel“ übernommen");
   await p.context().close();
 }
@@ -194,7 +238,7 @@ for (const [locale, name] of [["de-DE", "Einschlafen"], ["en-GB", "Sleep Words"]
 {
   const p = await page("de-DE", { blockFonts: false });
   // waitForFunction wertet ein Promise als „wahr“ – daher selbst abfragen.
-  await p.click("[data-sound=waves]");  // Aufnahme wird geladen und offline abgelegt
+  await p.click("#sounds [data-sound=waves]");  // Aufnahme wird geladen und offline abgelegt
   const cached = () => p.evaluate(async () => {
     const c = await caches.open("ew-v2");
     return !!(navigator.serviceWorker.controller && await c.match("clips/de-f.json") && await c.match("./")

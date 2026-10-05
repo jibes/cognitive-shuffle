@@ -2,11 +2,12 @@
 
 export const SESSION = {
   lead: 2,              // s Stille vor dem ersten Wort
-  tail: 30,             // s Nachlauf, Rauschen blendet aus
-  gap: [8, 20],         // s zwischen Wortanfängen
+  tail: 30,             // s Nachlauf, Hintergrund blendet aus
+  gap: [8, 15],         // s zwischen Wortanfängen (Studie: 8 s)
   voice: [0.85, 0.35],  // Lautstärke der Stimme
+  ramp: 20 * 60,        // s: so lange werden Pausen länger und Stimme leiser, danach gleichbleibend
   maxClip: 3,           // s Sicherheitsabstand vor Sitzungsende
-  minutes: [10, 15, 25],
+  minutes: { min: 5, max: 120, step: 5, default: 15 },
 };
 
 export const DISPLAY = {
@@ -15,7 +16,6 @@ export const DISPLAY = {
   hold: 5,              // s nach Wortanfang beginnt das Ausblenden
   fadeOut: 2.5,         // s
   night: 0.12,          // Helligkeit von „Gute Nacht“
-  skipLead: 0.3,        // s vor dem nächsten Wortanfang landen
 };
 
 export const AMBIENT = {
@@ -33,6 +33,12 @@ export const AUDIO = {
   maxOutRate: 24000,                    // darüber wird ganzzahlig heruntergeteilt
 };
 
-export const LONG_PRESS_MS = 900;      // beendet die Sitzung
+export const CONTROLS = {
+  holdMs: 1200,         // Halten, bis das Bedienfeld entsperrt
+  relockMs: 12000,      // ohne Berührung sperrt es sich wieder
+  minLeftS: 120,        // −5 kürzt höchstens bis so viel Restzeit
+  keepS: 20,            // beim Neumischen bleiben Wörter der nächsten Sekunden unverändert
+  remixDelayMs: 500,    // Regler: erst nach kurzer Ruhe neu mischen
+};
 
 export const lerp = (range, p) => range[0] + (range[1] - range[0]) * p;
