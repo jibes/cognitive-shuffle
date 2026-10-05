@@ -20,10 +20,14 @@ Einschlafhilfe nach der Cognitive-Shuffle-Methode: neutrale Wörter in wachsende
 
 ## Lizenz
 
+Copyright © 2026 Sebastian Bruenecke.
+
 | Teil | Lizenz |
 |---|---|
-| Code (`web/js`, `web/css`, `web/sw.js`, HTML, `tools/`, `tests/`), Icons | [MIT](LICENSE) |
+| Code (`web/js`, `web/css`, `web/sw.js`, HTML, `tools/`, `tests/`), Icons | [GPL-3.0 oder später](LICENSE): Kopien und veränderte Fassungen müssen unter derselben Lizenz offen bleiben |
 | Schrift Newsreader `web/fonts/` (selbst ausgeliefert, keine Fremdanbieter) | [SIL OFL 1.1](web/fonts/OFL.txt) |
 | Wortlisten `words/*.txt`, Oberflächen- und Info-Texte | [CC BY 4.0](words/LICENSE) |
 | Hintergrund-Aufnahmen `web/sounds/*.mp3` | CC BY 4.0 der Urheber, [Nachweis](web/sounds/CREDITS.md) |
 | Wort-Clips `web/clips/*.json` (ElevenLabs) | [alle Rechte vorbehalten](web/clips/LICENSE) |
+
+Die Daten (Wortlisten, Aufnahmen, Clips) sind eigenständige Werke neben dem Programm, keine Teile davon; die GPL erfasst sie nicht.
