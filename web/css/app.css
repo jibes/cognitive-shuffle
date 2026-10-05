@@ -201,6 +201,8 @@ input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 2px va
   outline: none;
 }
 .wheel::-webkit-scrollbar { display: none; }
+.wheel.dragging { scroll-snap-type: none; cursor: grabbing; }
+.wheel.dragging .item { cursor: grabbing; }
 .wheel:focus-visible { box-shadow: inset 0 0 0 1px var(--muted); }
 .wheel .track {
   display: flex;

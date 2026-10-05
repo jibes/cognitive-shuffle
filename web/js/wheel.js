@@ -7,11 +7,11 @@ export function createWheel(el, { min, max, step, value, onChange }) {
     it.className = "item";
     it.dataset.min = String(v);
     it.textContent = String(v);
-    it.addEventListener("click", () => select(v, true));
+    it.addEventListener("click", () => { if (!justDragged) select(v, true); });
     track.appendChild(it);
   }
   const item = v => track.querySelector(`[data-min="${v}"]`);
-  let current = null, settle = 0;
+  let current = null, settle = 0, justDragged = false;
   let target = null;  // Ziel einer programmgesteuerten Bewegung: Zwischenstände nicht übernehmen
 
   function center(v, smooth) {
@@ -32,19 +32,61 @@ export function createWheel(el, { min, max, step, value, onChange }) {
     target = smooth ? v : null;
     center(v, smooth);
   }
-  for (const ev of ["pointerdown", "touchstart", "wheel"]) {
-    el.addEventListener(ev, () => { target = null; }, { passive: true });  // Nutzer übernimmt
+  el.addEventListener("touchstart", () => { target = null; }, { passive: true });  // Nutzer wischt selbst
+
+  // Desktop: Mausrad (senkrecht oder waagrecht) dreht in Schritten
+  let wheelAcc = 0;
+  el.addEventListener("wheel", e => {
+    e.preventDefault();
+    wheelAcc += Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+    const steps = Math.trunc(wheelAcc / 40);
+    if (steps) { wheelAcc -= steps * 40; select((target ?? current) + steps * step, true); }
+  }, { passive: false });
+
+  // Desktop: mit der Maus ziehen; danach rastet die nächste Zahl ein
+  let drag = null;
+  el.addEventListener("pointerdown", e => {
+    target = null;
+    if (e.pointerType !== "mouse" || e.button !== 0) return;
+    drag = { x: e.clientX, left: el.scrollLeft, moved: false, id: e.pointerId };
+  });
+  el.addEventListener("pointermove", e => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x;
+    if (Math.abs(dx) > 4 && !drag.moved) {  // erst jetzt fangen, sonst landet ein Klick nicht auf der Zahl
+      drag.moved = true;
+      el.classList.add("dragging");
+      el.setPointerCapture(drag.id);
+    }
+    if (drag.moved) el.scrollLeft = drag.left - dx;
+  });
+  const endDrag = () => {
+    if (!drag) return;
+    const moved = drag.moved;
+    drag = null;
+    el.classList.remove("dragging");
+    if (!moved) return;
+    select(nearest(), true);
+    justDragged = true;  // der Klick am Ende des Ziehens ist kein Tipp auf eine Zahl
+    setTimeout(() => { justDragged = false; }, 0);
+  };
+  el.addEventListener("pointerup", endDrag);
+  el.addEventListener("pointercancel", endDrag);
+  function nearest() {
+    const mid = el.scrollLeft + el.clientWidth / 2;
+    let best = current, dist = Infinity;
+    for (const it of track.children) {
+      const d = Math.abs(it.offsetLeft + it.offsetWidth / 2 - mid);
+      if (d < dist) { dist = d; best = Number(it.dataset.min); }
+    }
+    return best;
   }
   // Nach dem Wischen: die Zahl in der Mitte gilt
   el.addEventListener("scroll", () => {
     clearTimeout(settle);
     settle = setTimeout(() => {
-      const mid = el.scrollLeft + el.clientWidth / 2;
-      let best = current, dist = Infinity;
-      for (const it of track.children) {
-        const d = Math.abs(it.offsetLeft + it.offsetWidth / 2 - mid);
-        if (d < dist) { dist = d; best = Number(it.dataset.min); }
-      }
+      if (drag) return;
+      const best = nearest();
       if (target != null) { if (best === target) target = null; return; }
       mark(best);
     }, 90);

@@ -196,6 +196,32 @@ for (const [locale, title, heading] of [["de-DE", "Einschlafwörter", "So geht�
   await p.context().close();
 }
 
+// Dauer-Rad am Desktop: Mausrad, Ziehen mit der Maus, Klick nach dem Ziehen
+{
+  const ctx = await browser.newContext({ locale: "de-DE", viewport: { width: 1280, height: 800 } });
+  const p = await ctx.newPage();
+  await p.route(/fonts\.(googleapis|gstatic)\.com/, r => r.abort());
+  await p.goto(base);
+  await p.waitForTimeout(300);
+  const v = () => p.$eval("#wheel", e => Number(e.getAttribute("aria-valuenow")));
+  const c = await p.$eval("#wheel", e => { const r = e.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
+  const v0 = await v();
+  await p.mouse.move(c.x, c.y);
+  await p.mouse.wheel(0, 100);
+  await p.waitForTimeout(600);
+  check(await v() === v0 + 10, `Rad Desktop: Mausrad (${v0} → ${await v()})`);
+  const v1 = await v();
+  await p.mouse.down();
+  await p.mouse.move(c.x - 200, c.y, { steps: 10 });
+  await p.mouse.up();
+  await p.waitForTimeout(800);
+  check(await v() > v1, `Rad Desktop: Ziehen (${v1} → ${await v()})`);
+  await p.click('#wheel [data-min="30"]');
+  await p.waitForTimeout(800);
+  check(await v() === 30, "Rad Desktop: Klick nach dem Ziehen");
+  await ctx.close();
+}
+
 // Unterbrechung (Anruf, andere App): Bedienfeld öffnet mit Hinweis, Weiter setzt fort
 {
   const p = await page("de-DE");
