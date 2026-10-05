@@ -115,10 +115,11 @@ for (const [locale, title, heading] of [["de-DE", "Einschlafwörter", "So geht�
   check(await p.getAttribute("[data-voice=f]", "aria-checked") === "true", "Stimme: weiblich vorgewählt");
   await p.click("[data-voice=m]");
   await p.reload();
+  loaded.length = 0;  // vorher Geladenes (auch verspätetes Offline-Ablegen von de-f) zählt nicht
   check(await p.getAttribute("[data-voice=m]", "aria-checked") === "true", "Stimme: Wahl bleibt nach Neuladen");
   const r = await session(p, "off", 10);
   check(!r.paused && Math.abs(r.duration - 632) < 1, "Stimme: männliche Sitzung spielt");
-  check(loaded.includes("de-m") && loaded.lastIndexOf("de-f") < loaded.indexOf("de-m"),
+  check(loaded.includes("de-m") && !loaded.includes("de-f"),
     `Stimme: nach dem Umschalten nur de-m geladen (${[...new Set(loaded)].join(", ")})`);
   await p.context().close();
 }
