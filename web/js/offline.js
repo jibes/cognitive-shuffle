@@ -14,10 +14,12 @@ export function registerOffline() {
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 }
 
-export async function keepOffline(url) {
+// still(): gilt die Wahl noch? Die Registrierung kann dauern; inzwischen Abgewähltes nicht laden.
+export async function keepOffline(url, still = () => true) {
   if (!ready) return;
   try {
     await ready;
+    if (!still()) return;
     const cache = await caches.open(CACHE);
     if (!(await cache.match(url))) await cache.add(url);  // meist aus dem HTTP-Cache, kein zweiter Download
   } catch (e) { /* offline nicht verfügbar – online geht es weiter */ }

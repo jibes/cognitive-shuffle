@@ -111,11 +111,17 @@ for (const [locale, title, heading] of [["de-DE", "Einschlafwörter", "So geht�
 {
   const p = await page("de-DE");
   const loaded = [];
-  p.on("request", r => { const m = r.url().match(/clips\/([\w-]+)\.json/); if (m) loaded.push(m[1]); });
+  let counting = false;  // erst ab dem Neuladen: vorher Geladenes zählt nicht
+  p.on("request", r => { const m = r.url().match(/clips\/([\w-]+)\.json/); if (m && counting) loaded.push(m[1]); });
   check(await p.getAttribute("[data-voice=f]", "aria-checked") === "true", "Stimme: weiblich vorgewählt");
+  // Erst wenn de-f offline abgelegt ist, sonst kann diese Anfrage noch ins Neuladen fallen
+  for (let t = Date.now(); !(await p.evaluate(async () => !!await (await caches.open("ew-v2")).match("clips/de-f.json")));) {
+    if (Date.now() - t > 30000) break;
+    await p.waitForTimeout(200);
+  }
   await p.click("[data-voice=m]");
+  counting = true;
   await p.reload();
-  loaded.length = 0;  // vorher Geladenes (auch verspätetes Offline-Ablegen von de-f) zählt nicht
   check(await p.getAttribute("[data-voice=m]", "aria-checked") === "true", "Stimme: Wahl bleibt nach Neuladen");
   const r = await session(p, "off", 10);
   check(!r.paused && Math.abs(r.duration - 632) < 1, "Stimme: männliche Sitzung spielt");

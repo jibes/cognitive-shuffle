@@ -96,14 +96,14 @@ async function prewarm(set) {
 function prepare() {
   const set = clipSet();
   prewarm(set);
-  loadBundle(set).then(() => keepOffline(`clips/${set}.json`), () => {});
+  loadBundle(set).then(() => keepOffline(`clips/${set}.json`, () => set === clipSet()), () => {});
   prepareSound();
 }
 
 // Lädt die Aufnahme des gewählten Hintergrunds vor und legt sie offline ab.
 function prepareSound() {
   const url = AMBIENT.files[sound];
-  if (url) loadFile(url).then(() => keepOffline(url), () => {});
+  if (url) loadFile(url).then(() => keepOffline(url, () => AMBIENT.files[sound] === url), () => {});
 }
 
 async function start(minutes) {
