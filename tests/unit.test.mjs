@@ -250,7 +250,7 @@ test("Info-Dialog: ein Abschnitt je Sprache mit Quellen", async () => {
     const m = html.match(new RegExp(`<article lang="${l}" data-lang-block="${l}">([\\s\\S]*?)</article>`));
     assert.ok(m, `Info-Abschnitt ${l} fehlt`);
     assert.equal((m[1].match(/<h3>/g) || []).length, 5, `${l}: fünf Unterabschnitte`);
-    assert.equal((m[1].match(/href="https:\/\//g) || []).length, 3 + 2 * Object.keys(AMBIENT.files).length + 1,
-      `${l}: drei Quellen, je Aufnahme Original und Lizenz, Blanket`);
+    assert.equal((m[1].match(/href="https:\/\//g) || []).length, 3 + 3 * Object.keys(AMBIENT.files).length + 1,
+      `${l}: drei Quellen, je Aufnahme Original, Urheber und Lizenz, Blanket`);
   }
 });
