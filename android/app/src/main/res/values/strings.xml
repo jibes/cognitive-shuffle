@@ -1,0 +1,9 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Sleep Words</string>
+    <string name="title_activity_main">Sleep Words</string>
+    <string name="package_name">ch.brunodev.sleepwords</string>
+    <string name="custom_url_scheme">ch.brunodev.sleepwords</string>
+    <string name="playback_channel">Playback</string>
+    <string name="playback_text">Playing – tap to open</string>
+</resources>

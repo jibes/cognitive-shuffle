@@ -2,11 +2,14 @@
 // Stimme und die Aufnahme des gewählten Hintergrunds im Offline-Cache liegen – auch beim allerersten Besuch, bei dem die
 // Seite noch nicht vom Service Worker kontrolliert wurde.
 
+import { isNative } from "./native.js";
+
 const CACHE = "ew-v3";  // wie in sw.js
 
 let ready = null;
 
 export function registerOffline() {
+  if (isNative) return;  // App: alles liegt im Paket
   if (!("serviceWorker" in navigator) || !("caches" in window)) return;
   ready = navigator.serviceWorker.register("sw.js").then(() => navigator.serviceWorker.ready);
   ready.catch(() => {});

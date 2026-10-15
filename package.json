@@ -1,14 +1,26 @@
 {
   "name": "cognitive-shuffle",
+  "version": "1.0.0",
   "private": true,
   "license": "GPL-3.0-or-later",
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "test": "node --test tests/*.test.mjs",
     "e2e": "node tests/e2e.mjs",
-    "serve": "python3 -m http.server 8000 -d web"
+    "serve": "python3 -m http.server 8000 -d web",
+    "android:sync": "cap sync android",
+    "android:open": "cap open android",
+    "apk": "cap sync android && cd android && ./gradlew assembleDebug"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.5.3",
+    "@capacitor/core": "8.5.3"
   },
   "devDependencies": {
+    "@capacitor/cli": "8.5.3",
     "playwright": "1.56.1"
   }
 }

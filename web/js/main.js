@@ -10,6 +10,7 @@ import { createStage } from "./stage.js";
 import { createWheel } from "./wheel.js";
 import { registerOffline, keepOffline } from "./offline.js";
 import { preview, stopPreview } from "./preview.js";
+import { isNative, keepAlive, release } from "./native.js";
 
 const $ = id => document.getElementById(id);
 const ui = {
@@ -19,7 +20,7 @@ const ui = {
 };
 const stage = createStage({
   audio: $("player"), word: $("word"), tapHint: $("tapplay"),
-  onInterrupt: () => interrupt(), onResume: () => uninterrupt(),
+  onInterrupt: () => interrupt(), onResume: () => uninterrupt(), onStop: release,
 });
 
 // Phasen: start -> building -> playing -> night -> done (-> start)
@@ -117,6 +118,7 @@ async function start() {
   stopPreview();
   stage.unlock();  // iOS: noch im Tap
   enterFullscreen();  // ebenfalls nur im Tap erlaubt
+  keepAlive(TEXT[lang].title);  // App: Vordergrund-Dienst, ebenfalls im Tap
   ui.start.hidden = true;
   ui.stage.hidden = false;
   showHoldHint();
@@ -248,9 +250,11 @@ function endSession() {
 }
 
 // Vollbild während der Sitzung: blendet Status- und Navigationsleiste aus (Android, Desktop).
-// iPhone erlaubt das Webseiten nicht. Installiert läuft die App ohnehin im Vollbild (Manifest).
+// iPhone erlaubt das Webseiten nicht. Installiert läuft die App ohnehin im Vollbild (Manifest),
+// die Android-App blendet die Leisten nativ aus.
 let ownFullscreen = false;
 function enterFullscreen() {
+  if (isNative) return;
   const el = document.documentElement;
   const req = el.requestFullscreen || el.webkitRequestFullscreen;
   if (!req || document.fullscreenElement || document.webkitFullscreenElement) return;

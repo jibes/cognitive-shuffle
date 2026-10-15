@@ -1,0 +1,172 @@
+name: Android
+
+# APK built from the same web/ files, wrapped by Capacitor (android/).
+# Releases itself on main when the package.json version has no tag v<version> yet.
+# Obtainium follows the GitHub releases.
+on:
+  pull_request:
+    paths:
+      - web/**
+      - android/**
+      - capacitor.config.json
+      - package.json
+      - package-lock.json
+      - tools/android-*
+      - .github/workflows/android.yml
+  push:
+    branches: [main]
+    paths:
+      - web/**
+      - android/**
+      - capacitor.config.json
+      - package.json
+      - package-lock.json
+      - tools/android-*
+      - .github/workflows/android.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.ref }}
+  # never cancel a run on main: it may be publishing a release
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    outputs:
+      tag: ${{ steps.v.outputs.tag }}
+      release: ${{ steps.v.outputs.release }}
+      cert: ${{ steps.check.outputs.cert }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # tags and commit count for the version
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Java 21 (preinstalled on the runner)
+        run: echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
+      - run: npm ci
+      - run: npm test
+      - run: npx cap sync android
+
+      - id: v
+        name: Version
+        run: node tools/android-version.mjs ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && '--release' || '' }} | tee -a "$GITHUB_OUTPUT"
+
+      - name: Keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          RELEASE: ${{ steps.v.outputs.release }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            if [ "$RELEASE" = true ]; then
+              echo "::error::A release needs the ANDROID_KEYSTORE_* / ANDROID_KEY_* secrets"
+              exit 1
+            fi
+            echo "::warning::No signing secrets: this APK is debug-signed and cannot update a release install"
+            exit 0
+          fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+
+      - name: Build
+        working-directory: android
+        env:
+          VERSION_CODE: ${{ steps.v.outputs.code }}
+          VERSION_NAME: ${{ steps.v.outputs.name }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          export SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)
+          ./gradlew --no-daemon assembleRelease
+
+      - id: check
+        name: Check signer and contents
+        env:
+          EXPECTED_CERT: ${{ vars.ANDROID_CERT_SHA256 }}
+          RELEASE: ${{ steps.v.outputs.release }}
+          NAME: ${{ steps.v.outputs.name }}
+        run: |
+          apk=android/app/build/outputs/apk/release/app-release.apk
+          bt=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          cert=$("$bt/apksigner" verify --print-certs "$apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
+          echo "cert=$cert" >> "$GITHUB_OUTPUT"
+          echo "Version \`$NAME\`, signer SHA-256 \`$cert\`" >> "$GITHUB_STEP_SUMMARY"
+          norm() { tr -d ': \n' | tr 'A-F' 'a-f'; }
+          if [ "$RELEASE" = true ]; then
+            [ -n "$EXPECTED_CERT" ] || { echo "::error::Set the repo variable ANDROID_CERT_SHA256 to the release certificate"; exit 1; }
+            [ "$(echo "$cert" | norm)" = "$(echo "$EXPECTED_CERT" | norm)" ] || { echo "::error::Signer $cert is not the release certificate"; exit 1; }
+          fi
+          if unzip -p "$apk" 'classes*.dex' | grep -aq 'Lcom/google/android/gms/'; then
+            echo "::error::APK contains Google Play Services classes"
+            exit 1
+          fi
+          mkdir dist
+          cp "$apk" "dist/einschlafwoerter-$NAME.apk"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: apk
+          path: dist/
+          retention-days: 14
+
+      # No third-party emulator action: the runner's SDK does it, and nothing needs a SHA pin.
+      - name: Emulator smoke test
+        timeout-minutes: 20
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
+          export ANDROID_AVD_HOME="$RUNNER_TEMP/avd"  # avdmanager and emulator must agree
+          mkdir -p "$ANDROID_AVD_HOME"
+          img="system-images;android-35;google_apis;x86_64"
+          sdk="$ANDROID_HOME/cmdline-tools/latest/bin"
+          yes | "$sdk/sdkmanager" --install emulator "$img" | grep -v '^\[' || true
+          echo no | "$sdk/avdmanager" create avd -n smoke -k "$img" -d pixel_6 --force
+          emulator -avd smoke -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect > "$RUNNER_TEMP/emulator.log" 2>&1 &
+          booted() { timeout 120 adb wait-for-device && timeout 300 sh -c 'until [ "$(adb shell getprop sys.boot_completed | tr -d "\r")" = 1 ]; do sleep 3; done'; }
+          booted || { echo "::error::Emulator did not boot"; tail -80 "$RUNNER_TEMP/emulator.log"; exit 1; }
+          for s in window_animation_scale transition_animation_scale animator_duration_scale; do
+            adb shell settings put global "$s" 0
+          done
+          tools/android-smoke.sh dist/*.apk
+
+      - if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: smoke
+          path: smoke-out/
+          retention-days: 7
+
+  release:
+    needs: apk
+    if: needs.apk.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ needs.apk.outputs.tag }}
+      CERT: ${{ needs.apk.outputs.cert }}
+    steps:
+      - run: gh run download "$GITHUB_RUN_ID" -n apk -D dist
+      - name: Publish
+        run: |
+          {
+            echo "**Install and update with [Obtainium](https://obtainium.imranr.dev/):** add \`https://github.com/$GH_REPO\`."
+            echo
+            echo "Signing certificate SHA-256 (check with AppVerifier): \`$CERT\`"
+          } > notes.md
+          gh release create "$TAG" dist/*.apk --target "$GITHUB_SHA" --title "$TAG" --notes-file notes.md --generate-notes
