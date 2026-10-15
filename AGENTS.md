@@ -23,7 +23,7 @@ Deviations are listed below, each with a reason.
 - Hand-written `web/sw.js` instead of vite-plugin-pwa (no build step). Its `SHELL` list must name every file in `web/js` and `css`; a unit test checks it.
 - Tests: `node:test` (`npm test`) and a hand-rolled Playwright script (`npm run e2e`) instead of Vitest and `@playwright/test`. No ESLint/Prettier yet.
 - Android release ships an APK only, no AAB (not on Play).
-- README and code comments are German; keep new ones German too. Commits in English.
+- README and comments in `web/`, `tools/`, `tests/` are German; keep them German. Java in `android/` and workflows: English. Commits in English.
 
 ## Invariants
 - Storage keys stay `ew-*` (see `KEYS` in `web/js/main.js`).
