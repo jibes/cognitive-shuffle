@@ -257,3 +257,14 @@ test("Info-Dialog: ein Abschnitt je Sprache mit Quellen", async () => {
       `${l}: drei Quellen, je Aufnahme Original, Urheber und Lizenz, Blanket`);
   }
 });
+
+test("android-version: versionCode nach Schema, Entwicklungsstände dazwischen", async () => {
+  const { versionCode, devCode } = await import("../tools/android-version.mjs");
+  assert.equal(versionCode("1.0.0"), 10000000);
+  assert.equal(versionCode("1.2.3"), 10203000);
+  assert.throws(() => versionCode("1.100.0"));
+  assert.throws(() => versionCode("1.0"));
+  assert.equal(devCode("1.2.0", 5), 10200005);
+  assert.equal(devCode("1.2.0", 5000), 10200999);  // bleibt unter 1.2.1
+  assert.equal(devCode("", 34), 34);
+});

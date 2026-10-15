@@ -26,6 +26,7 @@ const SHELL = [
   "js/clips.js",
   "js/stage.js",
   "js/offline.js",
+  "js/native.js",
   "favicon.svg",
   "favicon-32.png",
   "apple-touch-icon.png",

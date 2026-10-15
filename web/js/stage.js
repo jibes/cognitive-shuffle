@@ -10,8 +10,8 @@ import { createWav } from "./wav.js";
 const SILENT_WAV = URL.createObjectURL(new Blob([createWav(800, 8000).buffer], { type: "audio/wav" }));
 
 // onInterrupt: Wiedergabe angehalten, ohne dass die App es wollte (Anruf, andere App übernimmt
-// den Ton, Pause am Sperrbildschirm). onResume: läuft wieder.
-export function createStage({ audio, word, tapHint, onInterrupt = () => {}, onResume = () => {} }) {
+// den Ton, Pause am Sperrbildschirm). onResume: läuft wieder. onStop: Sitzung vorbei.
+export function createStage({ audio, word, tapHint, onInterrupt = () => {}, onResume = () => {}, onStop = () => {} }) {
   let marks = null, offset = 0, idx = -1, rafId = 0, lastOpacity = "", hidden = false;
   let pendingSwap = null;
   let switching = false;  // Quelle wird gewechselt: Pausen dabei sind gewollt
@@ -134,6 +134,7 @@ export function createStage({ audio, word, tapHint, onInterrupt = () => {}, onRe
       lastOpacity = "";
       hidden = false;
       tapHint.hidden = true;
+      onStop();
     },
 
     goodNight(text, onDone) {

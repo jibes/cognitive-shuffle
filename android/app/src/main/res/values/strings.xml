@@ -1,0 +1,9 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Sleep Words</string>
+    <string name="title_activity_main">Sleep Words</string>
+    <string name="package_name">net.bruenecke.einschlafwoerter</string>
+    <string name="custom_url_scheme">net.bruenecke.einschlafwoerter</string>
+    <string name="playback_channel">Playback</string>
+    <string name="playback_text">Playing – tap to open</string>
+</resources>

@@ -1,0 +1,8 @@
+{
+  "appId": "net.bruenecke.einschlafwoerter",
+  "appName": "Einschlafwörter",
+  "webDir": "web",
+  "android": {
+    "backgroundColor": "#0e0805"
+  }
+}

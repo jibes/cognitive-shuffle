@@ -1,0 +1,68 @@
+import groovy.json.JsonSlurper
+
+apply plugin: 'com.android.application'
+
+// package.json is the only place the version lives (apps-data STANDARD.md §8).
+// versionCode = major·10⁷ + minor·10⁵ + patch·10³; CI overrides both for dev builds.
+def pkgVersion = new JsonSlurper().parse(rootProject.file('../package.json')).version
+def (major, minor, patch) = pkgVersion.tokenize('.').collect { it.toInteger() }
+def releaseCode = major * 10_000_000 + minor * 100_000 + patch * 1_000
+def env = System.getenv()
+
+android {
+    namespace = "net.bruenecke.einschlafwoerter"
+    compileSdk = rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId "net.bruenecke.einschlafwoerter"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode((env.VERSION_CODE ?: releaseCode) as int)
+        versionName(env.VERSION_NAME ?: pkgVersion)
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    signingConfigs {
+        release {
+            // Set by .github/workflows/android.yml from the ANDROID_* secrets.
+            if (env.ANDROID_KEYSTORE_FILE) {
+                storeFile file(env.ANDROID_KEYSTORE_FILE)
+                storePassword env.ANDROID_KEYSTORE_PASSWORD
+                keyAlias env.ANDROID_KEY_ALIAS
+                keyPassword env.ANDROID_KEY_PASSWORD
+            }
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            // Without the secrets the release build is debug-signed: installable, but not for publishing.
+            signingConfig env.ANDROID_KEYSTORE_FILE ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+    // Encrypted Google blob that F-Droid/IzzyOnDroid reject and that breaks reproducible builds.
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core:$androidxCoreVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
