@@ -16,6 +16,11 @@ fail() {
   echo "::error::$*"
   adb exec-out screencap -p > "$OUT/screen.png" || true
   adb logcat -d > "$OUT/logcat.txt" || true
+  # Auch ins Log, falls das Artefakt nicht erreichbar ist
+  echo "--- Texte im Bedienungshilfen-Baum"
+  grep -o -E '(text|content-desc|class)="[^"]+"' "$OUT/ui.xml" 2>/dev/null | sort | uniq -c | head -40 || true
+  echo "--- logcat (App)"
+  grep -E "Capacitor|chromium|einschlaf|AndroidRuntime" "$OUT/logcat.txt" | tail -40 || true
   exit 1
 }
 
@@ -26,7 +31,7 @@ center_of() {
   python3 - "$OUT/ui.xml" "$1" <<'PY'
 import re, sys, xml.etree.ElementTree as ET
 for n in ET.parse(sys.argv[1]).iter("node"):
-    if sys.argv[2] in (n.get("text"), n.get("content-desc")):
+    if sys.argv[2].lower() in ((n.get("text") or "").strip().lower(), (n.get("content-desc") or "").strip().lower()):
         x1, y1, x2, y2 = map(int, re.findall(r"\d+", n.get("bounds")))
         print((x1 + x2) // 2, (y1 + y2) // 2)
         break
