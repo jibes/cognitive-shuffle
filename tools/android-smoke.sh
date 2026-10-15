@@ -20,7 +20,7 @@ fail() {
   echo "--- Texte im Bedienungshilfen-Baum"
   grep -o -E '(text|content-desc|class)="[^"]+"' "$OUT/ui.xml" 2>/dev/null | sort | uniq -c | head -40 || true
   echo "--- logcat (App)"
-  grep -E "Capacitor|chromium|einschlaf|AndroidRuntime" "$OUT/logcat.txt" | tail -40 || true
+  grep -E "Capacitor|chromium|einschlaf|FATAL" "$OUT/logcat.txt" | tail -40 || true
   exit 1
 }
 
@@ -41,6 +41,8 @@ PY
 adb logcat -c
 adb install -r "$APK"
 adb shell pm grant "$PKG" android.permission.POST_NOTIFICATIONS 2>/dev/null || true
+# Einmaliger System-Hinweis „Viewing full screen“ (wegen der ausgeblendeten Leisten) würde die App verdecken
+adb shell settings put secure immersive_mode_confirmations confirmed
 adb shell am start -W -n "$PKG/.MainActivity"
 
 xy=""
