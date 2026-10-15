@@ -126,6 +126,8 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
           export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
+          export ANDROID_AVD_HOME="$RUNNER_TEMP/avd"  # avdmanager and emulator must agree
+          mkdir -p "$ANDROID_AVD_HOME"
           img="system-images;android-35;google_apis;x86_64"
           sdk="$ANDROID_HOME/cmdline-tools/latest/bin"
           yes | "$sdk/sdkmanager" --install emulator "$img" | grep -v '^\[' || true
