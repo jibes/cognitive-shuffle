@@ -120,6 +120,7 @@ jobs:
 
       # No third-party emulator action: the runner's SDK does it, and nothing needs a SHA pin.
       - name: Emulator smoke test
+        timeout-minutes: 20
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
@@ -127,11 +128,11 @@ jobs:
           export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
           img="system-images;android-35;google_apis;x86_64"
           sdk="$ANDROID_HOME/cmdline-tools/latest/bin"
-          yes | "$sdk/sdkmanager" --install emulator "$img" > /dev/null
+          yes | "$sdk/sdkmanager" --install emulator "$img" | grep -v '^\[' || true
           echo no | "$sdk/avdmanager" create avd -n smoke -k "$img" -d pixel_6 --force
           emulator -avd smoke -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect > "$RUNNER_TEMP/emulator.log" 2>&1 &
-          adb wait-for-device
-          timeout 300 sh -c 'until [ "$(adb shell getprop sys.boot_completed | tr -d "\r")" = 1 ]; do sleep 3; done'
+          booted() { timeout 120 adb wait-for-device && timeout 300 sh -c 'until [ "$(adb shell getprop sys.boot_completed | tr -d "\r")" = 1 ]; do sleep 3; done'; }
+          booted || { echo "::error::Emulator did not boot"; tail -80 "$RUNNER_TEMP/emulator.log"; exit 1; }
           for s in window_animation_scale transition_animation_scale animator_duration_scale; do
             adb shell settings put global "$s" 0
           done
