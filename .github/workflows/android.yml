@@ -14,7 +14,7 @@ on:
       - tools/android-*
       - .github/workflows/android.yml
   push:
-    branches: [main, ccr-4bbd8507-pt4i1u]  # TEMP: verify build, remove before merge
+    branches: [main]
     paths:
       - web/**
       - android/**
