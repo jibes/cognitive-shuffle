@@ -1,4 +1,4 @@
-package net.bruenecke.einschlafwoerter;
+package ch.brunodev.sleepwords;
 
 import android.app.Notification;
 import android.app.NotificationChannel;

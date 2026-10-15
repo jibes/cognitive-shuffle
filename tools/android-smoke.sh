@@ -8,7 +8,7 @@
 set -euo pipefail
 
 APK=$1
-PKG=net.bruenecke.einschlafwoerter
+PKG=ch.brunodev.sleepwords
 OUT=${SMOKE_OUT:-smoke-out}
 mkdir -p "$OUT"
 

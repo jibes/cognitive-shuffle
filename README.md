@@ -31,12 +31,12 @@ Lokal: `npm ci`, `npm run apk` (braucht Android SDK und JDK 21) → `android/app
 Einmalig für Releases (Repo-Einstellungen → Secrets and variables → Actions):
 
 ```sh
-keytool -genkeypair -v -keystore release.jks -alias einschlafwoerter -keyalg RSA -keysize 4096 -validity 10000
+keytool -genkeypair -v -keystore release.jks -alias sleepwords -keyalg RSA -keysize 4096 -validity 10000
 base64 -w0 release.jks   # → Secret ANDROID_KEYSTORE_BASE64
 keytool -list -v -keystore release.jks | grep SHA256   # → Variable ANDROID_CERT_SHA256
 ```
 
-Secrets `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` (`einschlafwoerter`), `ANDROID_KEY_PASSWORD`. Ohne sie baut die Action debug-signierte APKs, veröffentlicht aber nichts. Keystore sicher aufbewahren: ohne ihn lassen sich installierte Apps nicht mehr aktualisieren.
+Secrets `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` (`sleepwords`), `ANDROID_KEY_PASSWORD`. Ohne sie baut die Action debug-signierte APKs, veröffentlicht aber nichts. Keystore sicher aufbewahren: ohne ihn lassen sich installierte Apps nicht mehr aktualisieren.
 
 ## Lizenz
 

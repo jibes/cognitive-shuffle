@@ -5,8 +5,8 @@ Deviations are listed below, each with a reason.
 
 ## Two apps, one source
 - `web/` is the app. GitHub Pages serves it as it is (`deploy.yml`), and the Android app bundles the same files (`android.yml`).
-- `android/` is a Capacitor 8 shell (app ID `net.bruenecke.einschlafwoerter`, never change it). `npx cap sync android` copies `web/` into it; the copy (`android/app/src/main/assets/public`) is gitignored.
-- Native code is small and lives in `android/app/src/main/java/net/bruenecke/einschlafwoerter/`:
+- `android/` is a Capacitor 8 shell (app ID `ch.brunodev.sleepwords`, never change it). `npx cap sync android` copies `web/` into it; the copy (`android/app/src/main/assets/public`) is gitignored.
+- Native code is small and lives in `android/app/src/main/java/ch/brunodev/sleepwords/`:
   - `MainActivity`: registers the plugin, hides the system bars (like the PWA's `display: fullscreen`).
   - `PlaybackPlugin` + `PlaybackService`: a `mediaPlayback` foreground service while a session runs, so Android doesn't freeze the WebView with the screen locked. JS side: `web/js/native.js`, no-op in the browser.
 - In the app, `web/js/native.js` → `isNative` switches off the service worker and the web fullscreen request. Anything else browser-only must check it too.

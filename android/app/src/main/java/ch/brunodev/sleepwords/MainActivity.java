@@ -1,4 +1,4 @@
-package net.bruenecke.einschlafwoerter;
+package ch.brunodev.sleepwords;
 
 import android.os.Bundle;
 import androidx.core.view.WindowCompat;

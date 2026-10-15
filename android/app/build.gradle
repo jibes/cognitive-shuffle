@@ -10,10 +10,10 @@ def releaseCode = major * 10_000_000 + minor * 100_000 + patch * 1_000
 def env = System.getenv()
 
 android {
-    namespace = "net.bruenecke.einschlafwoerter"
+    namespace = "ch.brunodev.sleepwords"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "net.bruenecke.einschlafwoerter"
+        applicationId "ch.brunodev.sleepwords"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode((env.VERSION_CODE ?: releaseCode) as int)
