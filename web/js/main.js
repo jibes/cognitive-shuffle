@@ -296,7 +296,8 @@ function setLang(code, remember) {
   document.querySelectorAll("[data-t]").forEach(el => { el.textContent = t[el.dataset.t]; });
   document.querySelectorAll("[data-t-label]").forEach(el => { el.setAttribute("aria-label", t[el.dataset.tLabel]); });
   document.querySelectorAll("[data-lang-block]").forEach(el => { el.hidden = el.dataset.langBlock !== code; });
-  ui.lang.value = code;
+  $("lang-name").textContent = t.name;
+  for (const o of $("lang-list").children) o.setAttribute("aria-selected", String(o.dataset.lang === code));
   renderVoice();
   renderSounds();
   wheel.setUnit(t.minutes);
@@ -304,16 +305,59 @@ function setLang(code, remember) {
   prepare();
 }
 
+// Eigene Liste statt <select>: das Systemmenü lässt sich nicht gestalten.
+// Tastatur wie bei einer Auswahlliste: Pfeile, Pos1/Ende, Enter/Leertaste, Esc, Tab.
 function renderLangSwitch() {
-  ui.lang.closest(".lang").hidden = LANGS.length < 2;
-  for (const code of LANGS) {
-    const o = document.createElement("option");
-    o.value = code;
+  const btn = ui.lang, list = $("lang-list");
+  btn.closest(".lang").hidden = LANGS.length < 2;
+  list.replaceChildren(...LANGS.map(code => {
+    const o = document.createElement("li");
+    o.setAttribute("role", "option");
+    o.id = `lang-${code}`;
+    o.dataset.lang = code;
     o.lang = code;
     o.textContent = TEXT[code].name;
-    ui.lang.appendChild(o);
-  }
-  ui.lang.addEventListener("change", () => { if (ui.lang.value !== lang) setLang(ui.lang.value, true); });
+    return o;
+  }));
+  const options = () => [...list.children];
+  let active = 0;
+  const mark = i => {
+    active = (i + LANGS.length) % LANGS.length;
+    options().forEach((o, k) => o.classList.toggle("active", k === active));
+    list.setAttribute("aria-activedescendant", options()[active].id);
+  };
+  const open = () => {
+    list.hidden = false;
+    btn.setAttribute("aria-expanded", "true");
+    mark(Math.max(0, LANGS.indexOf(lang)));
+    list.focus();
+  };
+  const close = (refocus = true) => {
+    if (list.hidden) return;
+    list.hidden = true;
+    btn.setAttribute("aria-expanded", "false");
+    if (refocus) btn.focus();
+  };
+  const choose = code => { close(); if (code !== lang) setLang(code, true); };
+
+  list.tabIndex = -1;
+  btn.addEventListener("click", () => (list.hidden ? open() : close()));
+  btn.addEventListener("keydown", e => {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); open(); }
+  });
+  list.addEventListener("click", e => {
+    const o = e.target.closest("[role=option]");
+    if (o) choose(o.dataset.lang);
+  });
+  list.addEventListener("keydown", e => {
+    const moves = { ArrowDown: active + 1, ArrowUp: active - 1, Home: 0, End: LANGS.length - 1 };
+    if (e.key in moves) { e.preventDefault(); mark(moves[e.key]); }
+    else if (e.key === "Enter" || e.key === " ") { e.preventDefault(); choose(LANGS[active]); }
+    else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); }
+    else if (e.key === "Tab") close(false);
+  });
+  // Tipp daneben schließt
+  document.addEventListener("pointerdown", e => { if (!btn.closest(".lang").contains(e.target)) close(false); });
 }
 
 // ---------- Bedienung Startseite ----------
