@@ -99,7 +99,18 @@ for (const [locale, title, heading] of [["de-DE", "Einschlafwörter", "So geht�
 // Umschalter: Wahl wird gemerkt und übersteuert die Browsersprache
 {
   const p = await page("de-DE");
-  await p.selectOption("#lang", "en");
+  await p.focus("#lang");
+  await p.keyboard.press("ArrowDown");
+  await p.keyboard.press("Escape");
+  const esc = !(await p.isVisible("#lang-list")) && await p.evaluate(() => document.activeElement.id) === "lang";
+  await p.click("#lang");
+  await p.mouse.click(5, 400);
+  check(esc && !(await p.isVisible("#lang-list")) && await p.evaluate(() => document.documentElement.lang) === "de",
+    "Umschalter: Esc und Tipp daneben schließen ohne Wechsel");
+  await p.click("#lang");
+  check(await p.isVisible("#lang-list") && await p.getAttribute("#lang", "aria-expanded") === "true", "Umschalter: Liste öffnet");
+  await p.click("#lang-list [data-lang=en]");
+  check(!(await p.isVisible("#lang-list")) && await p.textContent("#lang-name") === "English", "Umschalter: Liste schließt, Knopf zeigt English");
   check(JSON.stringify(await p.$$eval("#voices button", bs => bs.map(b => b.textContent))) === '["Rainbird","Verity","Nathaniel"]',
     "Umschalter: englische Stimmen Rainbird, Verity, Nathaniel");
   check(await p.textContent("#go") === "Start"
