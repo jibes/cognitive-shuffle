@@ -98,8 +98,8 @@ jobs:
           apk=android/app/build/outputs/apk/release/app-release.apk
           bt=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
           "$bt/apksigner" verify --verbose --print-certs "$apk" | tee "$RUNNER_TEMP/signer.txt"
-          # "Signer #1 certificate …" or "Signer (minSdkVersion=…) certificate …", depending on build-tools
-          cert=$(sed -n 's/^Signer.*certificate SHA-256 digest: *//p' "$RUNNER_TEMP/signer.txt" | head -1)
+          # "V2 Signer: certificate …", "Signer #1 certificate …" etc., depending on flags and build-tools
+          cert=$(sed -n 's/^.*Signer.*certificate SHA-256 digest: *//p' "$RUNNER_TEMP/signer.txt" | head -1)
           [ -n "$cert" ] || { echo "::error::No signer certificate found in the APK"; exit 1; }
           echo "cert=$cert" >> "$GITHUB_OUTPUT"
           echo "Version \`$NAME\`, signer SHA-256 \`$cert\`" >> "$GITHUB_STEP_SUMMARY"
