@@ -30,6 +30,9 @@ Deviations are listed below, each with a reason.
 - No network calls at runtime except loading the app's own files.
 - No user-facing string is hard-coded: add it to `TEXT` in `web/js/i18n.js` for every language.
 
+## Merging
+- Owner's standing rule: open a PR from your branch and squash-merge it into `main` yourself as soon as all checks are green. No need to ask.
+
 ## Done checklist (before every push)
 1. `npm test && npm run e2e`
 2. Touched `android/` or `web/js/native.js`: CI (`android.yml`) builds the APK and runs the emulator smoke test (`tools/android-smoke.sh`) on the PR.
