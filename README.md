@@ -18,7 +18,7 @@ Einschlafhilfe nach der Cognitive-Shuffle-Methode: neutrale Wörter in wachsende
 - Wortlisten: Kriterien stehen als Kommentar oben in `words/<lang>.txt` (bildhaft, neutral, alltagsbekannt, eindeutig).
 - Neue Sprache: `words/<code>.txt`, Eintrag in `LANGS` (`tools/build_clips.py`) und `TEXT` (`web/js/i18n.js`), Clips bauen.
 - Deploy Web: Push auf `main` mit Änderungen in `web/` → `deploy.yml` testet und veröffentlicht `web/` (Pages-Quelle: „GitHub Actions“).
-- Deploy Android: `android.yml` baut bei jedem PR und Push auf `main` ein APK und prüft es im Emulator (Start, Sperre, Dienst läuft). Release: `version` in `package.json` erhöhen; sobald das auf `main` ist, legt die Action den Tag `v<version>` an und veröffentlicht das signierte APK als GitHub-Release.
+- Deploy Android: `android.yml` baut bei jedem PR und Push auf `main` ein APK und prüft es im Emulator (Start, Sperre, Dienst läuft). Jeder Build auf `main` wird veröffentlicht: Tag mit der nächsten freien Version (Patch nach dem höchsten Tag; `version` in `package.json` ist die Mindestversion, für minor/major dort erhöhen), signiertes APK als GitHub-Release.
 
 ## Android-App
 

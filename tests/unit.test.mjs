@@ -259,7 +259,13 @@ test("Info-Dialog: ein Abschnitt je Sprache mit Quellen", async () => {
 });
 
 test("android-version: versionCode nach Schema, Entwicklungsstände dazwischen", async () => {
-  const { versionCode, devCode } = await import("../tools/android-version.mjs");
+  const { versionCode, devCode, nextRelease } = await import("../tools/android-version.mjs");
+  assert.equal(nextRelease("1.1.0", []), "1.1.0");
+  assert.equal(nextRelease("1.1.0", ["1.0.0", "1.0.1", "1.1.0"]), "1.1.1");
+  assert.equal(nextRelease("1.1.0", ["1.1.0", "1.1.9", "1.1.10", "1.1.2"]), "1.1.11");  // numerisch, nicht alphabetisch
+  assert.equal(nextRelease("1.2.0", ["1.1.5"]), "1.2.0");  // package.json erhöht: Sprung
+  assert.equal(nextRelease("1.1.0", ["1.1.99"]), "1.2.0");
+  assert.equal(nextRelease("1.1.0", ["1.1.0", "foo"]), "1.1.1");
   assert.equal(versionCode("1.0.0"), 10000000);
   assert.equal(versionCode("1.2.3"), 10203000);
   assert.throws(() => versionCode("1.100.0"));

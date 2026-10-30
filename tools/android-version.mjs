@@ -1,7 +1,8 @@
 // Version der Android-App für .github/workflows/android.yml (Schema: apps-data STANDARD.md §8).
-// Einzige Quelle ist "version" in package.json. Fehlt dazu der Tag v<version> und ist ein Release
-// erlaubt (--release, nur auf main), wird veröffentlicht. Sonst Entwicklungsstand: letzter Tag plus
-// Zahl der Commits seither.
+// Jeder Build auf main ist ein Release (--release): "version" in package.json ist die Mindestversion,
+// veröffentlicht wird die erste freie ab dort – ist sie schon getaggt, der nächste Patch nach dem
+// höchsten Tag. Größere Sprünge (minor/major) durch Erhöhen in package.json.
+// Ohne --release (PRs): Entwicklungsstand, letzter Tag plus Zahl der Commits seither.
 // Ausgabe: Zeilen KEY=WERT für $GITHUB_OUTPUT.
 
 import { execFileSync } from "node:child_process";
@@ -17,6 +18,15 @@ export function versionCode(v) {
   return major * 1e7 + minor * 1e5 + patch * 1e3;
 }
 
+// Nächste Version nach der höchsten getaggten, mindestens `min`; Patch läuft bei 99 in minor über.
+export function nextRelease(min, tags) {
+  const top = tags.filter(t => /^\d+\.\d+\.\d+$/.test(t)).sort((a, b) => versionCode(a) - versionCode(b)).pop();
+  if (!top || versionCode(min) > versionCode(top)) return min;
+  let [major, minor, patch] = top.split(".").map(Number);
+  if (++patch > 99) { patch = 0; if (++minor > 99) { minor = 0; major++; } }
+  return `${major}.${minor}.${patch}`;
+}
+
 export function devCode(lastTagVersion, commitsSince) {
   return (lastTagVersion ? versionCode(lastTagVersion) : 0) + Math.min(commitsSince, 999);
 }
@@ -24,15 +34,15 @@ export function devCode(lastTagVersion, commitsSince) {
 function main() {
   const git = (...args) => execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
   const tryGit = (...args) => { try { return git(...args); } catch { return ""; } };
-  const version = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
-  const tag = `v${version}`;
-  const code = versionCode(version);
-  const tagged = tryGit("tag", "--list", tag) === tag;
-  const release = process.argv.includes("--release") && !tagged;
+  const min = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
+  versionCode(min);  // prüft das Format
+  const release = process.argv.includes("--release");
+  const tags = tryGit("tag", "--list", "v*").split("\n").filter(Boolean).map(t => t.slice(1));
+  const version = release ? nextRelease(min, tags) : min;
 
-  const out = { version, tag, release };
+  const out = { version, tag: `v${version}`, release };
   if (release) {
-    Object.assign(out, { code, name: version });
+    Object.assign(out, { code: versionCode(version), name: version });
   } else {
     const last = tryGit("describe", "--tags", "--match", "v[0-9]*", "--abbrev=0");
     const n = Number(git("rev-list", "--count", last ? `${last}..HEAD` : "HEAD"));

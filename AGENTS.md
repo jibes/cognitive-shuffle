@@ -13,10 +13,11 @@ Deviations are listed below, each with a reason.
 - Capacitor packages are pinned exactly; bump all `@capacitor/*` together, then `npx cap sync android` and commit the changes in `android/`.
 
 ## Releases (Android)
-- `package.json` `version` is the only version. Bump it in a PR; when it lands on main, `android.yml` tags `v<version>` and publishes the signed APK as a GitHub release. Obtainium picks it up.
+- Every Android build on main is a release: `android.yml` tags the next free version and publishes the signed APK (`sleepwords-<version>.apk`) as a GitHub release. Obtainium picks it up.
+- Version: `package.json` `version` is the minimum; if it is already tagged, the patch after the highest tag is used (`nextRelease` in `tools/android-version.mjs`). Bump minor/major in `package.json` for bigger steps. Changes outside the `android.yml` paths (docs, tests only) don't build, so they don't release.
 - `versionCode = major·10⁷ + minor·10⁵ + patch·10³` (`tools/android-version.mjs`, tested). minor and patch stay ≤ 99.
 - Releases need the secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` and the variable `ANDROID_CERT_SHA256`; the workflow refuses to publish an APK signed by anything else.
-- Web deploys don't need a version bump.
+- Web deploys don't need a version.
 
 ## Deviations from the standard
 - Vanilla JS ES modules, no Vite, no TypeScript, no React: the app predates the standard, runs without a build step, and is small (largest file `main.js`, ~550 lines). Port only if it grows.
