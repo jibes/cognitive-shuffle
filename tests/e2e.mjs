@@ -355,7 +355,8 @@ for (const [locale, title, heading] of [["de-DE", "EinschlafwÃ¶rter", "So gehtâ€
     && await p.$eval("#player", a => a.paused), "Tastatur: Leertaste pausiert, Bedienfeld offen, Fokus auf Abspielen");
   await p.keyboard.press("Escape");
   await p.waitForTimeout(500);
-  check(await p.$eval("#panel", e => e.hidden) && !(await p.$eval("#player", a => a.paused)), "Tastatur: Esc spielt weiter");
+  const esc = { panel: await p.$eval("#panel", e => e.hidden ? "zu" : "offen"), paused: await p.$eval("#player", a => a.paused) };
+  check(esc.panel === "zu" && !esc.paused, `Tastatur: Esc spielt weiter (Bedienfeld ${esc.panel}, pausiert ${esc.paused})`);
   await p.$eval("#player", a => { a.currentTime = a.duration - 0.5; });
   await p.waitForTimeout(3000);
   check(await p.$eval("#panel", e => e.hidden) && await p.textContent("#word") === "Gute Nacht",

@@ -105,14 +105,14 @@ export function createStage({ audio, word, tapHint, onInterrupt = () => {}, onRe
       });
     },
 
-    // Pause im Bedienfeld; ein späteres resume() oder Play am Sperrbildschirm hebt sie auf.
+    // Pause im Bedienfeld. Aufgehoben erst bei „playing“: das „pause“-Ereignis kommt asynchron
+    // und darf auch nach einem schnellen resume() nicht als Unterbrechung gelten.
     pause() {
       held = true;
       audio.pause();
     },
 
     resume() {
-      held = false;
       const p = audio.play();
       Promise.resolve(p).then(() => { tapHint.hidden = true; }, () => { tapHint.hidden = false; })
         .then(() => { switching = false; });
