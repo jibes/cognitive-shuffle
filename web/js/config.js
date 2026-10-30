@@ -34,8 +34,7 @@ export const AUDIO = {
 };
 
 export const CONTROLS = {
-  holdMs: 1200,         // Halten, bis das Bedienfeld entsperrt
-  relockMs: 12000,      // ohne Berührung sperrt es sich wieder
+  holdMs: 1200,         // Halten, bis pausiert wird und das Bedienfeld öffnet
   minLeftS: 120,        // −5 kürzt höchstens bis so viel Restzeit
   keepS: 20,            // beim Neumischen bleiben Wörter der nächsten Sekunden unverändert
   remixDelayMs: 500,    // Regler: erst nach kurzer Ruhe neu mischen

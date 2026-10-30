@@ -41,6 +41,14 @@ async function page(locale, { blockFonts = true } = {}) {
   return p;
 }
 
+// Zählt gestartete Hörproben (Web Audio); Sitzungen laufen über <audio>, zählen also nicht.
+const countPreviews = p => p.evaluate(() => {
+  window.__previews = 0;
+  const start = AudioBufferSourceNode.prototype.start;
+  AudioBufferSourceNode.prototype.start = function (...a) { window.__previews++; return start.apply(this, a); };
+});
+const previews = p => p.evaluate(() => window.__previews);
+
 async function session(p, sound, minutes) {
   await p.click(`#sounds [data-sound=${sound}]`);
   await p.click(`#wheel [data-min="${minutes}"]`);
@@ -134,7 +142,10 @@ for (const [locale, title, heading] of [["de-DE", "Einschlafwörter", "So geht�
     if (Date.now() - t > 30000) break;
     await p.waitForTimeout(200);
   }
-  await p.click("[data-voice=stefan]");
+  await countPreviews(p);
+  await p.click("#voices [data-voice=stefan]");
+  await p.waitForFunction(() => window.__previews > 0, null, { timeout: 15000 }).catch(() => {});
+  check(await previews(p) === 1, "Stimme: Wählen spielt ein Wort als Hörprobe");
   counting = true;
   await p.reload();
   check(await p.getAttribute("[data-voice=stefan]", "aria-checked") === "true", "Stimme: Wahl bleibt nach Neuladen");
@@ -166,7 +177,7 @@ for (const [locale, title, heading] of [["de-DE", "Einschlafwörter", "So geht�
   await q.context().close();
 }
 
-// Dauer-Rad: Wahl bleibt; Halten öffnet das Bedienfeld, ±5 min und Klang mischen den Rest neu
+// Dauer-Rad: Wahl bleibt; Halten pausiert und öffnet das Bedienfeld, ±5 min, Stimme und Klang mischen den Rest neu
 {
   const p = await page("de-DE");
   await p.click('#wheel [data-min="45"]');
@@ -184,8 +195,13 @@ for (const [locale, title, heading] of [["de-DE", "Einschlafwörter", "So geht�
   await hold(500);
   await p.waitForTimeout(600);
   check(await p.$eval("#panel", e => e.hidden) && await p.$eval("#hold", e => e.hidden), "Halten: zu kurz öffnet nichts, Ring verschwindet");
+  check(!(await p.$eval("#hold", e => e.classList.contains("cancel"))), "Halten: Ring um das Pausensymbol");
   await hold(1500);
-  check(!(await p.$eval("#panel", e => e.hidden)) && await p.textContent("#left-n") === "10", "Halten: Bedienfeld offen, Restzeit 10");
+  check(!(await p.$eval("#panel", e => e.hidden)) && await p.textContent("#left-n") === "10"
+    && await p.$eval("#player", a => a.paused) && await p.$eval("#panel-note", e => e.hidden),
+    "Halten: pausiert, Bedienfeld offen ohne Unterbrechungshinweis, Restzeit 10");
+  await p.waitForTimeout(13000);
+  check(!(await p.$eval("#panel", e => e.hidden)) && await p.$eval("#player", a => a.paused), "Pause: Bedienfeld bleibt offen, bleibt pausiert");
   const swapped = () => p.waitForFunction(() => document.getElementById("panel-status").textContent === "", null, { timeout: 30000 });
   await p.click('[data-adj="5"]');
   await swapped();
@@ -197,12 +213,23 @@ for (const [locale, title, heading] of [["de-DE", "Einschlafwörter", "So geht�
   await p.click('[data-adj="-5"]');
   await swapped();
   check(await p.textContent("#left-n") === "5", "−5 zweimal: Restzeit 5");
+  await countPreviews(p);
   await p.click("#sounds-live [data-sound=rain]");
   await swapped();
-  check(!(await p.$eval("#player", a => a.paused)) && await p.getAttribute("#sounds [data-sound=rain]", "aria-checked") === "true",
-    "Klang im Bedienfeld: spielt weiter, Startseite übernimmt die Wahl");
+  await p.waitForFunction(() => window.__previews > 0, null, { timeout: 15000 }).catch(() => {});
+  check(await p.$eval("#player", a => a.paused) && await p.getAttribute("#sounds [data-sound=rain]", "aria-checked") === "true"
+    && await previews(p) === 1, "Klang im Bedienfeld: Hörprobe, bleibt pausiert, Startseite übernimmt die Wahl");
+  const t0 = await p.$eval("#player", a => a.currentTime);
+  await p.click("#voices-live [data-voice=stefan]");
+  await swapped();
+  await p.waitForFunction(() => window.__previews > 1, null, { timeout: 15000 }).catch(() => {});
+  const t1 = await p.$eval("#player", a => a.currentTime);
+  check(await p.$eval("#player", a => a.paused) && await p.getAttribute("#voices [data-voice=stefan]", "aria-checked") === "true"
+    && await previews(p) === 2 && Math.abs(t1 - t0) < 1,
+    `Stimme im Bedienfeld: ein Wort als Hörprobe, neu gemischt ab derselben Stelle (${t0.toFixed(1)} → ${t1.toFixed(1)} s)`);
   await p.click("#resume");
-  check(await p.$eval("#panel", e => e.hidden), "Weiter: Bedienfeld zu");
+  await p.waitForTimeout(800);
+  check(await p.$eval("#panel", e => e.hidden) && !(await p.$eval("#player", a => a.paused)), "Abspielen: Bedienfeld zu, spielt weiter");
   await hold(1500);
   check(await p.evaluate(() => !!document.fullscreenElement), "Vollbild während der Sitzung");
   await p.click("#end");
@@ -269,8 +296,11 @@ for (const [locale, title, heading] of [["de-DE", "Einschlafwörter", "So geht�
   const cdp = await p.context().newCDPSession(p);
   await cdp.send("Emulation.setCPUThrottlingRate", { rate: 20 });
   await p.click("#go");
-  await p.mouse.move(180, 300); await p.mouse.down(); await p.waitForTimeout(1500); await p.mouse.up();
+  await p.mouse.move(180, 300); await p.mouse.down(); await p.waitForTimeout(300);
+  const cancelIcon = await p.$eval("#hold", e => e.classList.contains("cancel"));
+  await p.waitForTimeout(1200); await p.mouse.up();
   await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
+  check(cancelIcon, "Vorbereitung: Halten zeigt das Stoppsymbol");
   await p.waitForTimeout(500);
   check(!(await p.$eval("#start", e => e.hidden)), "Vorbereitung: Halten bricht ab");
   await p.context().close();
@@ -321,10 +351,11 @@ for (const [locale, title, heading] of [["de-DE", "Einschlafwörter", "So geht�
   check(!(await p.$eval("#player", a => a.paused)), "Unterbrechung: Weiter nach Änderung spielt");
   // Tastatur: Leertaste öffnet, Esc schließt
   await p.keyboard.press(" ");
-  check(!(await p.$eval("#panel", e => e.hidden)) && await p.evaluate(() => document.activeElement.id) === "resume",
-    "Tastatur: Leertaste öffnet Bedienfeld, Fokus auf Weiter");
+  check(!(await p.$eval("#panel", e => e.hidden)) && await p.evaluate(() => document.activeElement.id) === "resume"
+    && await p.$eval("#player", a => a.paused), "Tastatur: Leertaste pausiert, Bedienfeld offen, Fokus auf Abspielen");
   await p.keyboard.press("Escape");
-  check(await p.$eval("#panel", e => e.hidden), "Tastatur: Esc schließt Bedienfeld");
+  await p.waitForTimeout(500);
+  check(await p.$eval("#panel", e => e.hidden) && !(await p.$eval("#player", a => a.paused)), "Tastatur: Esc spielt weiter");
   await p.$eval("#player", a => { a.currentTime = a.duration - 0.5; });
   await p.waitForTimeout(3000);
   check(await p.$eval("#panel", e => e.hidden) && await p.textContent("#word") === "Gute Nacht",

@@ -15,6 +15,7 @@ export function createStage({ audio, word, tapHint, onInterrupt = () => {}, onRe
   let marks = null, offset = 0, idx = -1, rafId = 0, lastOpacity = "", hidden = false;
   let pendingSwap = null;
   let switching = false;  // Quelle wird gewechselt: Pausen dabei sind gewollt
+  let held = false;       // vom Nutzer pausiert: keine Unterbrechung
 
   const now = () => offset + audio.currentTime;
 
@@ -104,7 +105,14 @@ export function createStage({ audio, word, tapHint, onInterrupt = () => {}, onRe
       });
     },
 
+    // Pause im Bedienfeld; ein späteres resume() oder Play am Sperrbildschirm hebt sie auf.
+    pause() {
+      held = true;
+      audio.pause();
+    },
+
     resume() {
+      held = false;
       const p = audio.play();
       Promise.resolve(p).then(() => { tapHint.hidden = true; }, () => { tapHint.hidden = false; })
         .then(() => { switching = false; });
@@ -121,6 +129,7 @@ export function createStage({ audio, word, tapHint, onInterrupt = () => {}, onRe
 
     stop() {
       marks = null;
+      held = false;
       if (pendingSwap) { release(pendingSwap.url); pendingSwap.done(); pendingSwap = null; }
       if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
       const old = audio.src;
@@ -149,7 +158,7 @@ export function createStage({ audio, word, tapHint, onInterrupt = () => {}, onRe
 
   audio.addEventListener("play", api.frames);
   // Beim Ende feuert „pause“ kurz vor „ended“ – das ist keine Unterbrechung.
-  audio.addEventListener("pause", () => { if (marks && !switching && !audio.ended) onInterrupt(); });
-  audio.addEventListener("playing", () => { if (marks) onResume(); });
+  audio.addEventListener("pause", () => { if (marks && !switching && !held && !audio.ended) onInterrupt(); });
+  audio.addEventListener("playing", () => { held = false; if (marks) onResume(); });
   return api;
 }
