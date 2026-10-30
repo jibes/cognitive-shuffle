@@ -41,7 +41,7 @@
   <section class="settings">
     <div class="field">
       <span class="label" id="voice-label" data-t="voice"></span>
-      <div class="seg" role="radiogroup" aria-labelledby="voice-label" id="voices"></div>
+      <div class="seg voices" role="radiogroup" aria-labelledby="voice-label" id="voices"></div>
     </div>
     <div class="field">
       <span class="label" id="sound-label" data-t="sound"></span>
@@ -72,11 +72,13 @@
   <div id="tapplay" hidden data-t="tap"></div>
   <p id="hold-hint" class="hold-hint" data-t="holdHint"></p>
 
-  <!-- Gedrückt halten: Ring füllt sich um das Stoppsymbol, dann öffnet das Bedienfeld -->
+  <!-- Gedrückt halten: Ring füllt sich um das Pausensymbol, dann pausiert die Wiedergabe und das
+       Bedienfeld öffnet. Während der Vorbereitung bricht Halten ab (Stoppsymbol). -->
   <div id="hold" class="hold" hidden aria-hidden="true">
     <svg viewBox="0 0 120 120" width="120" height="120">
       <circle cx="60" cy="60" r="54" class="ring-bg"/>
       <circle cx="60" cy="60" r="54" class="ring" id="hold-ring" pathLength="100"/>
+      <g class="pause"><rect x="47" y="45" width="9" height="30" rx="2.5"/><rect x="64" y="45" width="9" height="30" rx="2.5"/></g>
       <rect x="47" y="47" width="26" height="26" rx="4" class="stop"/>
     </svg>
   </div>
@@ -92,6 +94,10 @@
       </div>
     </div>
     <div class="field">
+      <span class="label" id="voice-live-label" data-t="voice"></span>
+      <div class="seg voices" role="radiogroup" aria-labelledby="voice-live-label" id="voices-live"></div>
+    </div>
+    <div class="field">
       <span class="label" id="sound-live-label" data-t="sound"></span>
       <div class="seg sounds" role="radiogroup" aria-labelledby="sound-live-label" id="sounds-live"></div>
     </div>
@@ -105,8 +111,12 @@
     </div>
     <p class="panel-status" id="panel-status" aria-live="polite"></p>
     <div class="actions">
-      <button type="button" id="end" class="end" data-t="end"></button>
-      <button type="button" id="resume" class="resume" data-t="resume"></button>
+      <button type="button" id="end" class="end" data-t-label="end">
+        <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></svg>
+      </button>
+      <button type="button" id="resume" class="resume" data-t-label="resume">
+        <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path d="M8 5.5v13a1 1 0 001.5.86l10.4-6.5a1 1 0 000-1.72L9.5 4.64A1 1 0 008 5.5z" fill="currentColor"/></svg>
+      </button>
     </div>
   </div>
 </div>
@@ -127,7 +137,7 @@
         <li>Handy weglegen, Bildschirm sperren – die Wörter laufen weiter.</li>
         <li>Zu jedem Wort ein Bild ausmalen: Farbe, Form, wo es liegt. Kommt kein Bild, einfach das Wort im Kopf wiederholen. Nichts festhalten; beim nächsten Wort weiter.</li>
       </ol>
-      <p><strong>Gedrückt halten</strong>, bis sich der Ring um das Stoppsymbol gefüllt hat: Hintergrund und Lautstärke ändern, Zeit verlängern oder kürzen, beenden. Ohne Berührung schließt sich das Feld nach einigen Sekunden wieder. Unterbricht ein Anruf oder eine andere App den Ton, öffnet es sich von selbst; „Weiter“ setzt fort. Am Computer öffnet es auch die Leertaste. Kurzes Tippen bewirkt nichts – so stört eine zufällige Berührung im Bett nicht.</p>
+      <p><strong>Gedrückt halten</strong>, bis sich der Ring um das Pausensymbol gefüllt hat: Die Wiedergabe pausiert. Jetzt Stimme, Hintergrund und Lautstärke ändern (mit Hörprobe) oder die Zeit verlängern bzw. kürzen; ▶ spielt weiter, ■ beendet. Unterbricht ein Anruf oder eine andere App den Ton, öffnet sich das Feld von selbst. Am Computer pausiert auch die Leertaste, Esc spielt weiter. Kurzes Tippen bewirkt nichts – so stört eine zufällige Berührung im Bett nicht.</p>
       <p>Brave unter Android: in den Einstellungen die Hintergrundwiedergabe erlauben. Als App installieren: im Browsermenü „App installieren“ bzw. in Safari „Zum Home-Bildschirm“. Nach einem Besuch mit Netz läuft die App auch offline.</p>
 
       <h3>Wissenschaftlicher Hintergrund</h3>
@@ -165,7 +175,7 @@
         <li>Put the phone down and lock the screen – the words keep playing.</li>
         <li>Picture each word: its colour, shape, where it is. If no image comes, just repeat the word in your head. Don’t hold on; move on with the next word.</li>
       </ol>
-      <p><strong>Press and hold</strong> until the ring around the stop symbol is full: change background and volume, add or remove time, or stop. Without touch the panel closes again after a few seconds. If a call or another app interrupts the sound, it opens by itself; “Continue” resumes. On a computer, the space bar opens it too. A short tap does nothing – so an accidental touch in bed does no harm.</p>
+      <p><strong>Press and hold</strong> until the ring around the pause symbol is full: playback pauses. Now change voice, background and volume (with a short preview) or add or remove time; ▶ plays on, ■ stops. If a call or another app interrupts the sound, the panel opens by itself. On a computer, the space bar pauses too and Esc plays on. A short tap does nothing – so an accidental touch in bed does no harm.</p>
       <p>Brave on Android: allow background playback in settings. To install as an app: “Install app” in the browser menu, or “Add to Home Screen” in Safari. After one visit online it also works offline.</p>
 
       <h3>Scientific background</h3>

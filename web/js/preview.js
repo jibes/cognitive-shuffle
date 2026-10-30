@@ -1,10 +1,11 @@
-import { AMBIENT } from "./config.js";
+import { AMBIENT, SESSION } from "./config.js";
 import { SOUNDS, bedScale, makeLoop, loopFill } from "./ambient.js";
 import { bedDb } from "./mix.js";
 import { loadFile } from "./clips.js";
 
 // Hörprobe beim Wählen von Klang und Lautstärke: einige Sekunden über Web Audio,
 // Lautstärke folgt dem Regler live. Gleiche Eichung wie in der Sitzung.
+// Beim Wählen der Stimme: ein Wort in Sitzungslautstärke.
 
 const LENGTH_S = 8, FADE_S = 0.4;
 let ctx = null, current = null;  // { kind, src, gain }
@@ -77,9 +78,36 @@ export async function preview(sound) {
   current = me;
 }
 
+let word = null;  // { src } der laufenden Wortprobe
+
+// load: () => Promise<{ samples, rate }>. context() noch im Tap, geladen wird danach.
+export async function previewWord(load) {
+  const c = context();
+  if (!c) return;
+  const me = {};
+  word = me;
+  let x;
+  try { x = await load(); } catch (e) { return; }
+  if (word !== me) return;  // inzwischen andere Stimme gewählt
+  const buffer = c.createBuffer(1, x.samples.length, x.rate);
+  buffer.getChannelData(0).set(x.samples);
+  const src = c.createBufferSource(), gain = c.createGain();
+  src.buffer = buffer;
+  gain.gain.value = SESSION.voice[0];
+  src.connect(gain).connect(c.destination);
+  me.src = src;
+  src.start();
+}
+
+function stopWord() {
+  if (word && word.src) try { word.src.stop(); } catch (e) { /* schon beendet */ }
+  word = null;
+}
+
 export function stopPreview() {
   wanted = null;
   fadeOut();
+  stopWord();
 }
 
 function fadeOut() {

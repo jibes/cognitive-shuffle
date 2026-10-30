@@ -9,7 +9,7 @@ import { makeLoop } from "./ambient.js";
 import { createStage } from "./stage.js";
 import { createWheel } from "./wheel.js";
 import { registerOffline, keepOffline } from "./offline.js";
-import { preview, stopPreview } from "./preview.js";
+import { preview, previewWord, stopPreview } from "./preview.js";
 import { isNative, keepAlive, release } from "./native.js";
 
 const $ = id => document.getElementById(id);
@@ -20,11 +20,11 @@ const ui = {
 };
 const stage = createStage({
   audio: $("player"), word: $("word"), tapHint: $("tapplay"),
-  onInterrupt: () => interrupt(), onResume: () => uninterrupt(), onStop: release,
+  onInterrupt: () => interrupt(), onResume: () => resumed(), onStop: release,
 });
 
 // Phasen: start -> building -> playing -> night -> done (-> start)
-// Während „playing“ ist das Bedienfeld gesperrt, bis man gedrückt hält.
+// Während „playing“ ist das Bedienfeld gesperrt; gedrückt halten pausiert und öffnet es.
 let phase = "start";
 let lang = null;
 const clipSet = () => `${lang}-${voice}`;  // web/clips/<set>.json, nur die gewählte Stimme wird geladen
@@ -200,6 +200,19 @@ function changeDuration(deltaMin) {
   remix();
 }
 
+// Andere Stimme derselben Sprache: gleiche Wörter, neue Clips. Fehlt ein Wort, wird nachgezogen.
+async function changeVoice() {
+  const s = session;
+  if (!s) return;
+  s.set = clipSet();
+  try {
+    const have = await loadBundle(s.set);
+    if (session !== s) return;
+    s.marks.forEach(m => { if (m.w && !(m.w in have)) m.w = null; });
+  } catch (e) { /* remix meldet nichts; alte Mischung läuft weiter */ }
+  remix();
+}
+
 let soundTimer = 0;
 function changeSound(immediate) {
   if (!session) return;
@@ -242,6 +255,7 @@ function prepareSound() {
 }
 
 function endSession() {
+  stopPreview();
   uninterrupt();
   lockPanel();
   session = null;
@@ -361,30 +375,46 @@ function renderLangSwitch() {
 }
 
 // ---------- Bedienung Startseite ----------
+// Stimme: zwei Knopfreihen (Startseite, Bedienfeld) mit demselben Zustand; Wählen spielt ein Wort.
 function renderVoice() {
-  const box = $("voices");
   const keys = VOICES[lang].map(([k]) => k);
-  if (box.dataset.lang !== lang) {  // Knöpfe je Sprache neu
-    box.dataset.lang = lang;
-    box.replaceChildren(...VOICES[lang].map(([key, name]) => {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.setAttribute("role", "radio");
-      b.dataset.voice = key;
-      b.textContent = name;
-      b.addEventListener("click", () => {
-        if (key === voice) return;
-        voice = key;
-        voiceChoice[lang] = key;
-        storage.setJSON(KEYS.voices, voiceChoice);
-        renderVoice();
-        prepare();
-      });
-      return b;
-    }));
-  }
   if (!keys.includes(voice)) voice = keys[0];
-  for (const b of box.children) b.setAttribute("aria-checked", String(b.dataset.voice === voice));
+  for (const box of document.querySelectorAll(".voices")) {
+    if (box.dataset.lang !== lang) {  // Knöpfe je Sprache neu
+      box.dataset.lang = lang;
+      box.replaceChildren(...VOICES[lang].map(([key, name]) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.setAttribute("role", "radio");
+        b.dataset.voice = key;
+        b.textContent = name;
+        b.addEventListener("click", () => {
+          if (key !== voice) {
+            voice = key;
+            voiceChoice[lang] = key;
+            storage.setJSON(KEYS.voices, voiceChoice);
+            renderVoice();
+            prepare();
+            if (live(b)) changeVoice();
+          }
+          previewVoice();
+        });
+        return b;
+      }));
+    }
+    for (const b of box.children) b.setAttribute("aria-checked", String(b.dataset.voice === voice));
+  }
+}
+
+// Ein zufälliges Wort der gewählten Stimme
+function previewVoice() {
+  const set = clipSet();
+  previewWord(async () => {
+    const words = Object.keys(await loadBundle(set));
+    const w = words[Math.floor(Math.random() * words.length)];
+    const [samples, rate] = await Promise.all([pcm(set, w), outRate(set)]);
+    return { samples, rate };
+  });
 }
 
 // Hintergrund: Klang und Lautstärke getrennt; Knöpfe aus AMBIENT.sounds, Texte sound_<name>.
@@ -395,7 +425,7 @@ const SOUND_ICONS = {
   rain: '<path d="M7 4l-2 5M13 4l-2 5M19 4l-2 5M10 12l-2 5M16 12l-2 5M7 17l-1 3M13 17l-1 3" stroke-linecap="round"/>',
   waves: '<path d="M2 10c2.5 0 2.5-3 5-3s2.5 3 5 3 2.5-3 5-3 2.5 3 5 3M2 16c2.5 0 2.5-3 5-3s2.5 3 5 3 2.5-3 5-3 2.5 3 5 3" stroke-linecap="round"/>',
 };
-const live = el => !!el.closest("#panel");  // im Bedienfeld: neu mischen statt Hörprobe
+const live = el => !!el.closest("#panel");  // im Bedienfeld: zusätzlich den Rest neu mischen
 function renderSounds() {
   for (const box of document.querySelectorAll(".sounds")) {
     if (!box.children.length) {
@@ -411,7 +441,8 @@ function renderSounds() {
           storage.set(KEYS.sound, sound);
           renderSounds();
           prepareSound();
-          if (live(b)) changeSound(true); else preview({ kind: sound, db: level });
+          if (live(b)) changeSound(true);
+          preview({ kind: sound, db: level });
         });
         box.appendChild(b);
       }
@@ -434,7 +465,8 @@ for (const input of document.querySelectorAll("input.level")) {
     level = Number(input.value);
     storage.set(KEYS.level, String(level));
     renderSounds();
-    if (live(input)) changeSound(false); else preview({ kind: sound, db: level });
+    if (live(input)) changeSound(false);
+    preview({ kind: sound, db: level });
   });
 }
 
@@ -446,8 +478,9 @@ $("go").addEventListener("click", start);
 
 // ---------- Bedienung während der Sitzung ----------
 // Kurzes Tippen bewirkt nichts (außer Abspielen, falls der Browser es blockiert hat).
-// Gedrückt halten: Ring füllt sich, dann öffnet das Bedienfeld; es sperrt sich nach Ruhe wieder.
-let holdStart = 0, holdRaf = 0, holdProgress = 0, relockTimer = 0;
+// Gedrückt halten: Ring füllt sich um das Pausensymbol, dann pausiert die Wiedergabe und das
+// Bedienfeld öffnet. Es bleibt offen, bis Abspielen oder Stopp.
+let holdStart = 0, holdRaf = 0, holdProgress = 0;
 
 function setRing(p) {
   holdProgress = p;
@@ -473,6 +506,7 @@ function holdFrame() {
 function holdDown() {
   if (!(phase === "playing" || phase === "building") || !ui.panel.hidden) return;
   holdStart = performance.now();
+  ui.hold.classList.toggle("cancel", phase === "building");  // Vorbereitung: Stopp statt Pause
   ui.hold.hidden = false;
   stage.hideWord = true;
   if (!holdRaf) holdRaf = requestAnimationFrame(holdFrame);
@@ -483,8 +517,8 @@ function holdUp() {
   if (stage.paused && phase === "playing") stage.resume();  // Wiedergabe war blockiert
 }
 
-// Unterbrochen (Anruf, andere App, Pause am Sperrbildschirm): Bedienfeld offen und
-// ohne Zeitsperre, Hinweis oben; „Weiter“ setzt fort (im Tap – iOS verlangt das).
+// Unterbrochen (Anruf, andere App, Pause am Sperrbildschirm): Bedienfeld offen, Hinweis oben;
+// Abspielen setzt fort (im Tap – iOS verlangt das).
 let interrupted = false;
 function interrupt() {
   if (phase !== "playing" || interrupted) return;
@@ -492,7 +526,6 @@ function interrupt() {
   holdStart = 0;
   ui.hold.hidden = true;
   if (ui.panel.hidden) openPanel();
-  clearTimeout(relockTimer);
   ui.panelNote.textContent = TEXT[lang].interrupted;
   ui.panelNote.hidden = false;
 }
@@ -500,33 +533,38 @@ function uninterrupt() {
   if (!interrupted) return;
   interrupted = false;
   ui.panelNote.hidden = true;
-  if (!ui.panel.hidden) touchPanel();
+}
+// Spielt wieder – auch per Play am Sperrbildschirm oder Kopfhörer: Bedienfeld zu.
+function resumed() {
+  uninterrupt();
+  if (!ui.panel.hidden) lockPanel();
+}
+function play() {
+  stopPreview();
+  uninterrupt();
+  lockPanel();
+  stage.resume();
 }
 
 let leftTimer = 0;
 function openPanel(focus = false) {
   if (navigator.vibrate) navigator.vibrate(15);
+  stage.pause();
   stage.hideWord = true;
   ui.panel.hidden = false;
   ui.stage.classList.add("unlocked");
   ui.holdHint.hidden = true;
   renderLeft();
   leftTimer = setInterval(renderLeft, 5000);
-  touchPanel();
   if (focus) $("resume").focus();
 }
 function lockPanel() {
   const hadFocus = ui.panel.contains(document.activeElement);
   if (hadFocus) ui.stage.focus();
-  clearTimeout(relockTimer);
   clearInterval(leftTimer);
   ui.panel.hidden = true;
   ui.stage.classList.remove("unlocked");
   stage.hideWord = false;
-}
-function touchPanel() {
-  clearTimeout(relockTimer);
-  if (!interrupted) relockTimer = setTimeout(lockPanel, CONTROLS.relockMs);
 }
 
 function showHoldHint() {
@@ -536,17 +574,16 @@ function showHoldHint() {
 }
 
 ui.stage.addEventListener("pointerdown", e => {
-  if (ui.panel.contains(e.target)) { touchPanel(); return; }
+  if (ui.panel.contains(e.target)) return;
   holdDown();
 });
 for (const ev of ["pointerup", "pointercancel", "pointerleave"]) ui.stage.addEventListener(ev, holdUp);
-ui.panel.addEventListener("input", touchPanel);
-ui.panel.addEventListener("keydown", e => { touchPanel(); if (e.key === "Escape") lockPanel(); });
+ui.panel.addEventListener("keydown", e => { if (e.key === "Escape") play(); });
 ui.stage.addEventListener("click", e => {
   if (phase === "done" && !ui.panel.contains(e.target)) showStart();
 });
 ui.stage.addEventListener("contextmenu", e => e.preventDefault());
-// Tastatur: Leertaste oder Enter öffnet das Bedienfeld (Esc schließt es)
+// Tastatur: Leertaste oder Enter pausiert und öffnet das Bedienfeld (Esc spielt weiter)
 document.addEventListener("keydown", e => {
   if (phase === "building" && e.key === "Escape") { cancelBuild(); return; }
   if (phase !== "playing" || !ui.panel.hidden || e.repeat) return;
@@ -554,10 +591,7 @@ document.addEventListener("keydown", e => {
 });
 document.querySelectorAll("[data-adj]").forEach(b =>
   b.addEventListener("click", () => changeDuration(Number(b.dataset.adj))));
-$("resume").addEventListener("click", () => {
-  if (interrupted || stage.paused) stage.resume();
-  lockPanel();
-});
+$("resume").addEventListener("click", play);
 $("end").addEventListener("click", endSession);
 
 $("player").addEventListener("ended", () => {
