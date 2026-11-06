@@ -53,6 +53,7 @@ FADE_IN_S = 0.030
 TAIL_S = 0.120  # Nachlauf nach dem letzten lauten Fenster: Ausklang nicht kappen
 FADE_OUT_S = 0.100  # liegt im Nachlauf, nicht auf dem Wort
 STRAY_GAP_S = 0.150  # Lücke, ab der ein Randgeräusch nicht mehr zum Wort gehört
+STRAY_GAP_NO_TS_S = 0.300  # ohne Zeitstempel (andere Engines): erst ab hier, schont Endlaute wie -k, -p
 STRAY_DB = 15.0  # … und mindestens so viel leiser als die Spitze ist
 PEAK_DBFS = -3.0
 BITRATE = "48k"
@@ -254,7 +255,7 @@ def eleven_fetch(voice_id, body, key):
 
 def eleven_render(words, voice_id, model, lang, speed, stability, seed, batch=1,
                   direction="", conc=3):
-    """Liefert {Wort: float32-Array}.
+    """Liefert ({Wort: float32-Array}, {Wort: (Anfang, Ende) des Worts in s laut Zeitstempeln}).
 
     batch=1: jedes Wort ein Request, ganze Antwort -> nur trimmen (sauberster Schnitt).
     batch>1: Sätze „A. B. C.“, Schnitt an Zeichen-Zeitstempeln (günstiger, Listenintonation).
@@ -281,18 +282,18 @@ def eleven_render(words, voice_id, model, lang, speed, stability, seed, batch=1,
     with ThreadPoolExecutor(conc) as pool:  # Starter-Plan: 3 gleichzeitige Anfragen
         resps = list(pool.map(lambda j: eleven_fetch(voice_id, j[2], key), jobs))
 
-    out = {}
+    out, spoken = {}, {}
     for (chunk, spans, body), resp in zip(jobs, resps):
         pcm = base64.b64decode(resp["audio_base64"])
         x = np.frombuffer(pcm, dtype="<i2").astype(np.float32) / 32768
         al = resp["alignment"]
         if "".join(al["characters"]) != body["text"]:
             raise RuntimeError(f"Zeitstempel passen nicht zum Text (Batch ab {chunk[0]!r})")
-        if len(chunk) == 1:
-            out[chunk[0]] = x.copy()
-            continue
         t0, t1 = al["character_start_times_seconds"], al["character_end_times_seconds"]
         bounds = [(t0[a], t1[b - 1]) for a, b in spans]
+        if len(chunk) == 1:
+            out[chunk[0]], spoken[chunk[0]] = x.copy(), bounds[0]
+            continue
         end_all = len(x) / SR
         for j, (w, (s, e)) in enumerate(zip(chunk, bounds)):
             # Rand vorn/hinten, aber höchstens bis zur Mitte der Lücke zum Nachbarwort
@@ -301,7 +302,8 @@ def eleven_render(words, voice_id, model, lang, speed, stability, seed, batch=1,
             lo = max(s - 0.10, (prev_e + s) / 2)
             hi = min(e + 0.35, (e + next_s) / 2)
             out[w] = x[int(lo * SR):int(hi * SR)].copy()
-    return out
+            spoken[w] = (s - lo, e - lo)
+    return out, spoken
 
 
 # ---------- Signalverarbeitung ----------
@@ -324,7 +326,7 @@ def encode_mp3(x):
     return p.stdout
 
 
-def trim(x):
+def trim(x, spoken=None):
     # Hüllkurve in 10-ms-Fenstern; Schwelle so, als wäre schon auf PEAK_DBFS
     # normalisiert (sonst verlieren leise Wörter mehr Ausklang)
     win = int(SR * 0.010)
@@ -339,19 +341,28 @@ def trim(x):
     # Leises, abgesetztes Geräusch am Rand (Atem, Rest des Nachbarworts) verwerfen;
     # kurze Verschlusspausen vor Plosiven (St-, K-) liegen unter STRAY_GAP_S
     runs = np.split(loud, np.nonzero(np.diff(loud) > 1)[0] + 1)
-    gap = int(STRAY_GAP_S / 0.010)
-    while len(runs) > 1 and runs[1][0] - runs[0][-1] > gap and db[runs[0]].max() < PEAK_DBFS - STRAY_DB:
+    gap = int((STRAY_GAP_S if spoken else STRAY_GAP_NO_TS_S) / 0.010)
+    # Mit Zeitstempeln (spoken = Anfang, Ende des Worts in s): nichts innerhalb des Worts verwerfen,
+    # auch nicht eine leise Verschlusslösung am Ende („rake“, „soup“) nach langer Pause
+    w0, w1 = ((spoken[0] - 0.03) / 0.010, (spoken[1] + 0.05) / 0.010) if spoken else (np.inf, -np.inf)
+    inside = lambda r: r[-1] >= w0 and r[0] <= w1
+    while (len(runs) > 1 and runs[1][0] - runs[0][-1] > gap
+           and db[runs[0]].max() < PEAK_DBFS - STRAY_DB and not inside(runs[0])):
         runs.pop(0)
-    while len(runs) > 1 and runs[-1][0] - runs[-2][-1] > gap and db[runs[-1]].max() < PEAK_DBFS - STRAY_DB:
+    while (len(runs) > 1 and runs[-1][0] - runs[-2][-1] > gap
+           and db[runs[-1]].max() < PEAK_DBFS - STRAY_DB and not inside(runs[-1])):
         runs.pop()
     loud = np.concatenate(runs)
     a = max(0, (loud[0] - 1) * win)  # ein Fenster Luft, Anlaute nicht kappen
     b = min(len(x), (loud[-1] + 1) * win + int(SR * TAIL_S))
+    if spoken:  # Wortgrenzen laut Zeitstempeln nie anschneiden
+        a = min(a, max(0, int((spoken[0] - 0.03) * SR)))
+        b = max(b, min(len(x), int((spoken[1] + TAIL_S) * SR)))
     return x[a:b]
 
 
-def process(x):
-    x = trim(x - np.mean(x))
+def process(x, spoken=None):
+    x = trim(x - np.mean(x), spoken)
     fi, fo = int(SR * FADE_IN_S), int(SR * FADE_OUT_S)
     x[:fi] *= np.linspace(0, 1, fi, endpoint=False)
     x[-fo:] *= np.linspace(1, 0, fo)
@@ -426,7 +437,7 @@ def main():
         words = [w for w in target if w not in current]  # Rest liegt aktuell vor
     print(f"{len(words)} Wörter ({a.lang}) zu rendern, Engine {a.engine}", file=sys.stderr)
 
-    missing = {}
+    missing, spoken = {}, {}
     if a.engine == "edge":
         raw = asyncio.run(edge_render(words, voice, a.rate, a.pitch))
     elif a.engine == "piper":
@@ -444,8 +455,8 @@ def main():
             SEEDS_PATH.write_text(json.dumps(seeds, ensure_ascii=False, indent=1, sort_keys=True)
                                   + "\n", encoding="utf-8")
         seed = {None: a.seed, **own} if a.batch == 1 and not a.voice else a.seed
-        raw = eleven_render(words, voice, a.eleven_model, a.lang, a.speed,
-                            a.stability, seed, a.batch, a.direction)
+        raw, spoken = eleven_render(words, voice, a.eleven_model, a.lang, a.speed,
+                                    a.stability, seed, a.batch, a.direction)
     else:
         raw = azure_render(words, voice, a.rate, a.pitch, cfg["xml"])
 
@@ -456,7 +467,7 @@ def main():
         clips = json.loads(clips_path.read_text(encoding="utf-8"))
     for w in words:
         x = raw[w] if isinstance(raw[w], np.ndarray) else decode(raw[w])
-        mp3 = encode_mp3(process(x))
+        mp3 = encode_mp3(process(x, spoken.get(w)))
         back = decode(mp3)  # nach MP3 messen, das hört man später
         dur = len(back) / SR
         peak = 20 * np.log10(np.max(np.abs(back)) + 1e-12)
