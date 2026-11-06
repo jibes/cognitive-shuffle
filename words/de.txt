@@ -594,7 +594,7 @@ Bachstelze
 Zaunkönig
 Nachtigall
 Schwalbe
-Kuckuck
+Singdrossel
 Specht
 Eisvogel
 Eule
