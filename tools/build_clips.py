@@ -53,9 +53,15 @@ FADE_IN_S = 0.030
 TAIL_S = 0.120  # Nachlauf nach dem letzten lauten Fenster: Ausklang nicht kappen
 FADE_OUT_S = 0.100  # liegt im Nachlauf, nicht auf dem Wort
 STRAY_GAP_S = 0.150  # Lücke, ab der ein Randgeräusch nicht mehr zum Wort gehört
+STRAY_GAP_NO_TS_S = 0.300  # ohne Zeitstempel (andere Engines): erst ab hier, schont Endlaute wie -k, -p
 STRAY_DB = 15.0  # … und mindestens so viel leiser als die Spitze ist
 PEAK_DBFS = -3.0
 BITRATE = "48k"
+# Pause im Wort („tree … root“): länger als MAX_PAUSE_S -> bis zu len(RETAKE_SEEDS) weitere Takes mit
+# anderem Seed, der mit der kürzesten Pause gilt (Seed landet in SEEDS_PATH). Kein Schnitt im Wort.
+MAX_PAUSE_S = 0.20
+PAUSE_DB = -35.0  # still: 10-ms-Fenster leiser als Spitze − 35 dB
+RETAKE_SEEDS = (7, 8)
 # Neue Sprache: Eintrag hier, words/<code>.txt und Texte in web/js/i18n.js
 LANGS = {
     "de": {"voice": "de-DE-KatjaNeural", "tl": "de", "xml": "de-DE",
@@ -254,7 +260,7 @@ def eleven_fetch(voice_id, body, key):
 
 def eleven_render(words, voice_id, model, lang, speed, stability, seed, batch=1,
                   direction="", conc=3):
-    """Liefert {Wort: float32-Array}.
+    """Liefert ({Wort: float32-Array}, {Wort: (Anfang, Ende) des Worts in s laut Zeitstempeln}).
 
     batch=1: jedes Wort ein Request, ganze Antwort -> nur trimmen (sauberster Schnitt).
     batch>1: Sätze „A. B. C.“, Schnitt an Zeichen-Zeitstempeln (günstiger, Listenintonation).
@@ -281,18 +287,18 @@ def eleven_render(words, voice_id, model, lang, speed, stability, seed, batch=1,
     with ThreadPoolExecutor(conc) as pool:  # Starter-Plan: 3 gleichzeitige Anfragen
         resps = list(pool.map(lambda j: eleven_fetch(voice_id, j[2], key), jobs))
 
-    out = {}
+    out, spoken = {}, {}
     for (chunk, spans, body), resp in zip(jobs, resps):
         pcm = base64.b64decode(resp["audio_base64"])
         x = np.frombuffer(pcm, dtype="<i2").astype(np.float32) / 32768
         al = resp["alignment"]
         if "".join(al["characters"]) != body["text"]:
             raise RuntimeError(f"Zeitstempel passen nicht zum Text (Batch ab {chunk[0]!r})")
-        if len(chunk) == 1:
-            out[chunk[0]] = x.copy()
-            continue
         t0, t1 = al["character_start_times_seconds"], al["character_end_times_seconds"]
         bounds = [(t0[a], t1[b - 1]) for a, b in spans]
+        if len(chunk) == 1:
+            out[chunk[0]], spoken[chunk[0]] = x.copy(), bounds[0]
+            continue
         end_all = len(x) / SR
         for j, (w, (s, e)) in enumerate(zip(chunk, bounds)):
             # Rand vorn/hinten, aber höchstens bis zur Mitte der Lücke zum Nachbarwort
@@ -301,7 +307,8 @@ def eleven_render(words, voice_id, model, lang, speed, stability, seed, batch=1,
             lo = max(s - 0.10, (prev_e + s) / 2)
             hi = min(e + 0.35, (e + next_s) / 2)
             out[w] = x[int(lo * SR):int(hi * SR)].copy()
-    return out
+            spoken[w] = (s - lo, e - lo)
+    return out, spoken
 
 
 # ---------- Signalverarbeitung ----------
@@ -324,7 +331,7 @@ def encode_mp3(x):
     return p.stdout
 
 
-def trim(x):
+def trim(x, spoken=None):
     # Hüllkurve in 10-ms-Fenstern; Schwelle so, als wäre schon auf PEAK_DBFS
     # normalisiert (sonst verlieren leise Wörter mehr Ausklang)
     win = int(SR * 0.010)
@@ -339,19 +346,47 @@ def trim(x):
     # Leises, abgesetztes Geräusch am Rand (Atem, Rest des Nachbarworts) verwerfen;
     # kurze Verschlusspausen vor Plosiven (St-, K-) liegen unter STRAY_GAP_S
     runs = np.split(loud, np.nonzero(np.diff(loud) > 1)[0] + 1)
-    gap = int(STRAY_GAP_S / 0.010)
-    while len(runs) > 1 and runs[1][0] - runs[0][-1] > gap and db[runs[0]].max() < PEAK_DBFS - STRAY_DB:
+    gap = int((STRAY_GAP_S if spoken else STRAY_GAP_NO_TS_S) / 0.010)
+    # Mit Zeitstempeln (spoken = Anfang, Ende des Worts in s): nichts innerhalb des Worts verwerfen,
+    # auch nicht eine leise Verschlusslösung am Ende („rake“, „soup“) nach langer Pause
+    w0, w1 = ((spoken[0] - 0.03) / 0.010, (spoken[1] + 0.05) / 0.010) if spoken else (np.inf, -np.inf)
+    inside = lambda r: r[-1] >= w0 and r[0] <= w1
+    while (len(runs) > 1 and runs[1][0] - runs[0][-1] > gap
+           and db[runs[0]].max() < PEAK_DBFS - STRAY_DB and not inside(runs[0])):
         runs.pop(0)
-    while len(runs) > 1 and runs[-1][0] - runs[-2][-1] > gap and db[runs[-1]].max() < PEAK_DBFS - STRAY_DB:
+    while (len(runs) > 1 and runs[-1][0] - runs[-2][-1] > gap
+           and db[runs[-1]].max() < PEAK_DBFS - STRAY_DB and not inside(runs[-1])):
         runs.pop()
     loud = np.concatenate(runs)
     a = max(0, (loud[0] - 1) * win)  # ein Fenster Luft, Anlaute nicht kappen
     b = min(len(x), (loud[-1] + 1) * win + int(SR * TAIL_S))
+    if spoken:  # Wortgrenzen laut Zeitstempeln nie anschneiden
+        a = min(a, max(0, int((spoken[0] - 0.03) * SR)))
+        b = max(b, min(len(x), int((spoken[1] + TAIL_S) * SR)))
     return x[a:b]
 
 
-def process(x):
-    x = trim(x - np.mean(x))
+def inner_pause(x):
+    """Längste Stille zwischen dem ersten und letzten lauten 10-ms-Fenster, in s."""
+    win = int(SR * 0.010)
+    n = len(x) // win
+    if n < 2:
+        return 0.0
+    rms = np.sqrt(np.mean(x[: n * win].reshape(n, win) ** 2, axis=1) + 1e-12)
+    db = 20 * np.log10(rms / (np.max(np.abs(x)) + 1e-12))
+    loud = np.nonzero(db > PAUSE_DB)[0]
+    if len(loud) < 2:
+        return 0.0
+    quiet = db[loud[0]:loud[-1]] <= PAUSE_DB
+    best = cur = 0
+    for q in quiet:
+        cur = cur + 1 if q else 0
+        best = max(best, cur)
+    return best * 0.010
+
+
+def process(x, spoken=None):
+    x = trim(x - np.mean(x), spoken)
     fi, fo = int(SR * FADE_IN_S), int(SR * FADE_OUT_S)
     x[:fi] *= np.linspace(0, 1, fi, endpoint=False)
     x[-fo:] *= np.linspace(1, 0, fo)
@@ -385,6 +420,7 @@ def main():
     ap.add_argument("--count", type=int, help="nur so viele Wörter, gleichmäßig über die Kategorien")
     ap.add_argument("--only", help="kommagetrennt, nur diese Wörter neu rendern")
     ap.add_argument("--mp3-dir", help="Clips als <Wort>.mp3 hierhin statt in die JSON (Proben)")
+    ap.add_argument("--review", help="Hörseite (HTML) der gerenderten Wörter hierhin, markierte zuerst")
     ap.add_argument("--status", action="store_true",
                     help="eleven: Ist/Soll je Stimme aus tools/clips_status.json, rendert nichts")
     a = ap.parse_args()
@@ -426,7 +462,7 @@ def main():
         words = [w for w in target if w not in current]  # Rest liegt aktuell vor
     print(f"{len(words)} Wörter ({a.lang}) zu rendern, Engine {a.engine}", file=sys.stderr)
 
-    missing = {}
+    missing, spoken = {}, {}
     if a.engine == "edge":
         raw = asyncio.run(edge_render(words, voice, a.rate, a.pitch))
     elif a.engine == "piper":
@@ -444,8 +480,28 @@ def main():
             SEEDS_PATH.write_text(json.dumps(seeds, ensure_ascii=False, indent=1, sort_keys=True)
                                   + "\n", encoding="utf-8")
         seed = {None: a.seed, **own} if a.batch == 1 and not a.voice else a.seed
-        raw = eleven_render(words, voice, a.eleven_model, a.lang, a.speed,
-                            a.stability, seed, a.batch, a.direction)
+        raw, spoken = eleven_render(words, voice, a.eleven_model, a.lang, a.speed,
+                                    a.stability, seed, a.batch, a.direction)
+        # Lange Pause im Wort: weitere Takes, kürzeste Pause gilt. Nicht bei Wörtern mit festem Seed
+        # (von Hand gewählt) und nicht bei Proben mit fremder Stimme oder Batches
+        if a.batch == 1 and not a.voice and not (a.only and a.seed != ap.get_default("seed")):
+            pause = {w: inner_pause(process(raw[w], spoken[w])) for w in words if w not in own}
+            for s in RETAKE_SEEDS:
+                todo = [w for w, p in pause.items() if p > MAX_PAUSE_S]
+                if not todo:
+                    break
+                print(f"{len(todo)} Wörter mit Pause über {MAX_PAUSE_S} s: Take mit Seed {s}", file=sys.stderr)
+                r2, sp2 = eleven_render(todo, voice, a.eleven_model, a.lang, a.speed, a.stability,
+                                        {None: s}, 1, a.direction)
+                for w in todo:
+                    p = inner_pause(process(r2[w], sp2[w]))
+                    if p < pause[w]:
+                        raw[w], spoken[w], pause[w] = r2[w], sp2[w], p
+                        if track:
+                            own[w] = s
+            if track:
+                SEEDS_PATH.write_text(json.dumps(seeds, ensure_ascii=False, indent=1, sort_keys=True)
+                                      + "\n", encoding="utf-8")
     else:
         raw = azure_render(words, voice, a.rate, a.pitch, cfg["xml"])
 
@@ -456,17 +512,20 @@ def main():
         clips = json.loads(clips_path.read_text(encoding="utf-8"))
     for w in words:
         x = raw[w] if isinstance(raw[w], np.ndarray) else decode(raw[w])
-        mp3 = encode_mp3(process(x))
+        mp3 = encode_mp3(process(x, spoken.get(w)))
         back = decode(mp3)  # nach MP3 messen, das hört man später
         dur = len(back) / SR
         peak = 20 * np.log10(np.max(np.abs(back)) + 1e-12)
         clips[w] = base64.b64encode(mp3).decode("ascii")
-        stats.append((w, dur, peak, len(mp3)))
+        stats.append((w, dur, peak, len(mp3), inner_pause(back)))
 
     med = statistics.median(s[1] for s in stats) if stats else 0.0
     flagged = 0
-    for w, dur, peak, size in stats:
+    review = []
+    for w, dur, peak, size, pause in stats:
         why = []
+        if pause > MAX_PAUSE_S:
+            why.append(f"Pause {pause:.2f} s")
         if dur > 2 * med or dur > 3.0:
             why.append("lang")
         if dur < 0.4 * med:
@@ -476,11 +535,14 @@ def main():
         if w in missing:
             why.append(f"Phonem fehlt: {missing[w]}")
         flagged += bool(why)
+        review.append((w, dur, pause, why))
         print(f"{w:<22} {dur:5.2f} s {peak:6.1f} dBFS {size/1024:5.1f} KB"
               + (f"   <-- {', '.join(why)}" if why else ""))
     total = sum(s[3] for s in stats)
     print(f"\nMedian {med:.2f} s, {total/1e6:.2f} MB MP3, {flagged} markiert",
           file=sys.stderr)
+    if a.review:
+        write_review(Path(a.review), set_id, review, clips)
 
     if a.mp3_dir:
         d = Path(a.mp3_dir)
@@ -505,6 +567,29 @@ def main():
         st["words"] = {w: st["words"][w] for w in clips if w in st["words"]}
         STATUS_PATH.write_text(json.dumps(status, ensure_ascii=False, indent=1, sort_keys=True)
                                + "\n", encoding="utf-8")
+
+
+def write_review(path, set_id, review, clips):
+    """Eine Seite zum Durchhören: markierte Wörter oben, darunter alle übrigen des Laufs."""
+    import html
+    review = sorted(review, key=lambda r: (not r[3], r[0].casefold()))
+    rows = "".join(
+        f'<div class="w{" flag" if why else ""}"><span>{html.escape(w)} <em>{dur:.2f} s · Pause {pause:.2f} s'
+        f'{" · " + html.escape(", ".join(why)) if why else ""}</em></span>'
+        f'<audio controls preload="none" src="data:audio/mpeg;base64,{clips[w]}"></audio></div>'
+        for w, dur, pause, why in review)
+    n = sum(bool(r[3]) for r in review)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(f"""<!doctype html><html lang="de"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Hörprobe {set_id}</title><style>
+:root{{--bg:#0e0805;--text:#c4875a;--muted:#6b4630;--line:#2a1a11}}
+body{{margin:0;padding:16px;background:var(--bg);color:var(--text);font:16px/1.4 Georgia,serif;max-width:46rem}}
+h1{{font-weight:400;font-style:italic;margin:0 0 6px}} p{{color:var(--muted);margin:0 0 12px}}
+.w{{padding:8px 0;border-top:1px solid var(--line)}} .w span{{display:block;margin-bottom:4px}}
+em{{color:var(--muted);font-size:.85em}} .flag span{{color:#e0a070}} audio{{width:100%;height:32px}}
+</style></head><body><h1>{set_id}: {len(review)} Wörter</h1><p>{n} markiert (oben).</p>{rows}</body></html>""",
+                    encoding="utf-8")
+    print(f"Hörseite: {path}", file=sys.stderr)
 
 
 def settings_tag(voice, a):
