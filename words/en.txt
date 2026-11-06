@@ -68,7 +68,6 @@ chalk cliff
 juniper
 elderberry
 hazel bush
-pussy willow
 willow tree
 linden tree
 beech wood
@@ -118,7 +117,6 @@ autumn breeze
 oak leaf
 birch leaf
 maple seed
-resin
 amber
 sandstone
 snail shell
@@ -198,6 +196,7 @@ pebble beach
 lavender field
 sunflower field
 apple blossom
+willow catkin
 # Kitchen
 teapot
 teacup
@@ -360,7 +359,6 @@ pistachio
 brazil nut
 oat milk
 sugar cube
-rock sugar
 maple syrup
 nutmeg
 star anise
@@ -430,6 +428,7 @@ courgette
 bell pepper
 clementine
 blackcurrant
+lemon cake
 # Garden
 watering can
 wheelbarrow
@@ -464,7 +463,6 @@ garden pond
 garden path
 stepping stone
 gravel path
-lawn
 gardening glove
 trowel
 flower bulb
@@ -603,7 +601,6 @@ bullfinch
 greenfinch
 wagtail
 starling
-thrush
 nightingale
 skylark
 swallow
@@ -673,8 +670,6 @@ tapir
 chinchilla
 gerbil
 dwarf rabbit
-tomcat
-cat's paw
 whisker
 dog basket
 dachshund
@@ -691,6 +686,8 @@ barn owl
 dalmatian
 beagle
 sea otter
+red squirrel
+song bird
 # Toys
 dice
 marble
@@ -791,15 +788,6 @@ potter's wheel
 # Home
 cushion
 wool blanket
-slipper
-woollen sock
-cardigan
-jumper
-woolly hat
-scarf
-glove
-umbrella
-wellington boots
 lantern
 tea light
 windowsill
@@ -827,20 +815,7 @@ rug
 doormat
 flower vase
 picture frame
-bicycle
-bicycle bell
-rowing boat
-sailboat
-sun hat
-picnic blanket
-handcart
-haystack
-barn
-windmill
-tent
-hot air balloon
 feather bed
-houseboat
 reading nook
 duvet
 pillow
@@ -882,15 +857,7 @@ poetry book
 globe
 binoculars
 magnifying glass
-hiking boot
-walking stick
-backpack
-thermos flask
-picnic basket
-sunglasses
-straw bag
 bath towel
-bathrobe
 bubble bath
 soap dish
 washcloth
@@ -924,49 +891,11 @@ cradle
 four-poster bed
 hanging chair
 beanbag
-earmuffs
-mitten
-neckerchief
-raincoat
-pyjamas
-nightgown
-bed socks
-dressing gown
-knee sock
-summer dress
-dungarees
-corduroy trousers
-linen shirt
-apron
-bicycle basket
-pram
-oar
-paddle
-canoe
-kayak
-raft
-fishing boat
-anchor
-harbour wall
-fishing net
-log cabin
-beach house
-farmhouse
-thatched roof
-farm gate
-barn door
-hayloft
-horse stable
-cowshed
 milking stool
 spinning wheel
 sheep's wool
 felt ball
-wooden clog
 willow whistle
-market stall
-flower stall
-fruit stall
 tea glass
 candle
 matchbox
@@ -983,8 +912,11 @@ eraser
 notebook
 fountain pen
 pencil case
-sandal
-straw hat
+fireplace
+clay jug
+snow globe
+compass
+postage stamp
 # Music
 harp
 violin
@@ -1007,5 +939,74 @@ village green
 market square
 veranda
 balcony
-fireplace
-clay jug
+bicycle
+bicycle bell
+rowing boat
+sailboat
+picnic blanket
+handcart
+haystack
+barn
+windmill
+tent
+hot air balloon
+houseboat
+walking stick
+backpack
+thermos flask
+picnic basket
+bicycle basket
+pram
+oar
+paddle
+canoe
+kayak
+raft
+fishing boat
+anchor
+harbour wall
+fishing net
+log cabin
+beach house
+farmhouse
+thatched roof
+farm gate
+barn door
+hayloft
+horse stable
+cowshed
+market stall
+flower stall
+fruit stall
+# Clothing
+cardigan
+jumper
+woolly hat
+scarf
+glove
+umbrella
+wellington boots
+slipper
+woollen sock
+sun hat
+hiking boot
+sunglasses
+straw bag
+bathrobe
+earmuffs
+mitten
+neckerchief
+raincoat
+pyjamas
+nightgown
+bed socks
+dressing gown
+knee sock
+summer dress
+dungarees
+corduroy trousers
+linen shirt
+apron
+wooden clog
+sandal
+straw hat

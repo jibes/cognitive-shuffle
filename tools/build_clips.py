@@ -17,7 +17,7 @@ Braucht ffmpeg im PATH. Beispiele:
   python tools/build_clips.py --lang de --engine piper --model de_DE-thorsten-high.onnx
   python tools/build_clips.py --lang de --only Würfel,Löffel   # nur diese neu, Rest bleibt
   python tools/build_clips.py --lang de --engine eleven --speaker stefan --count 300
-  python tools/build_clips.py --lang en --engine eleven --speaker rainbird --same-as verity  # neue Stimme, gleiche Wörter
+  python tools/build_clips.py --lang en --engine eleven --speaker <neu> --same-as rainbird  # neue Stimme, gleiche Wörter
   python tools/build_clips.py --lang de --engine eleven --voice <voice_id> \
       --only Würfel,Löffel --mp3-dir /tmp/probe   # Stimmprobe, Clips-Datei bleibt
 """
@@ -62,8 +62,8 @@ LANGS = {
            "eleven": {"laura": "Qy4b2JlSGxY7I9M9Bqxb",
                       "stefan": "iMHt6G42evkXunaDU065"}},
     "en": {"voice": "en-GB-SoniaNeural", "tl": "en-GB", "xml": "en-GB",
-           "eleven": {"verity": "1hlpeD1ydbI2ow0Tt3EW",
-                      "rainbird": "bgU7lBMo69PNEOWHFqxM",
+           # Verity (1hlpeD1ydbI2ow0Tt3EW) ausgemustert: tools/clips-retired/, nicht mehr rendern
+           "eleven": {"rainbird": "bgU7lBMo69PNEOWHFqxM",
                       "nathaniel": "AeRdCCKzvd23BpJoofzx"}},
 }
 ELEVEN_DIRECTION = "[calm, measured, slow]"

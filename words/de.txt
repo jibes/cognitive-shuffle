@@ -120,6 +120,9 @@ Seeglas
 Feder
 Vogelei
 Vogelnest
+Kiefernwald
+Sonnenaufgang
+Mohnfeld
 # Bäume, Blumen, Kräuter
 Kiefernnadel
 Bucheckern
@@ -127,7 +130,6 @@ Pusteblume
 Kleeblatt
 Löwenzahn
 Grashalm
-Mohnblume
 Kornblume
 Heidekraut
 Holunderbusch
@@ -188,7 +190,6 @@ Vergissmeinnicht
 Stiefmütterchen
 Löwenmäulchen
 Ringelblume
-Butterblume
 Kamille
 Schafgarbe
 Klatschmohn
@@ -275,7 +276,6 @@ Nudelholz
 Teigschaber
 Backpinsel
 Backblech
-Backpapier
 Kuchenform
 Muffinform
 Kuchengitter
@@ -292,9 +292,9 @@ Tonkrug
 Platzdeckchen
 Tischdecke
 Serviette
-Geschirrtuch
-Spülschwamm
 Küchenstuhl
+Salatschüssel
+Gewürzglas
 # Essen und Trinken
 Apfel
 Birne
@@ -365,7 +365,6 @@ Feldsalat
 Olive
 Steinpilz
 Brezel
-Laugenbrezel
 Brötchen
 Bauernbrot
 Vollkornbrot
@@ -426,10 +425,14 @@ Pfefferkorn
 Senfkorn
 Eistüte
 Eiskugel
+Kakaobohne
+Zitronenkuchen
+Mohnbrötchen
+Apfelstrudel
+Kirschkern
 # Garten
 Gießkanne
 Gießkännchen
-Gießwasser
 Schubkarre
 Rechen
 Pflanzschaufel
@@ -437,7 +440,6 @@ Gartenschere
 Gartenhandschuh
 Gartenschlauch
 Rasensprenger
-Reisigbesen
 Samentüte
 Blumenzwiebel
 Blumenerde
@@ -470,11 +472,9 @@ Geräteschuppen
 Gewächshaus
 Holzstapel
 Holzscheit
-Hauswand
 Gartenweg
 Kiesweg
 Trittstein
-Rasenfläche
 Steingarten
 Gartenteich
 Springbrunnen
@@ -498,6 +498,8 @@ Sonnenuhr
 Gartenzwerg
 Lichterkette
 Windspiel
+Gartenstuhl
+Walnussbaum
 # Tiere
 Igel
 Hase
@@ -591,7 +593,6 @@ Eichelhäher
 Bachstelze
 Zaunkönig
 Nachtigall
-Lerche
 Schwalbe
 Kuckuck
 Specht
@@ -624,7 +625,6 @@ Hummel
 Honigbiene
 Wildbiene
 Maikäfer
-Junikäfer
 Rosenkäfer
 Grille
 Grashüpfer
@@ -632,7 +632,6 @@ Raupe
 Schmetterling
 Zitronenfalter
 Tagpfauenauge
-Kohlweißling
 Nachtfalter
 Libelle
 Glühwürmchen
@@ -678,6 +677,8 @@ Lama
 Alpaka
 Steinbock
 Gämse
+Feldlerche
+Wildgans
 # Spielzeug und Basteln
 Murmel
 Murmelbahn
@@ -703,7 +704,6 @@ Kaufladen
 Spielküche
 Ritterburg
 Bauernhof
-Kasperle
 Handpuppe
 Fingerpuppe
 Marionette
@@ -838,9 +838,7 @@ Trockenblumen
 Kommode
 Kleiderschrank
 Garderobe
-Kleiderhaken
 Kleiderbügel
-Hängeschrank
 Holztruhe
 Weidentruhe
 Holzkiste
@@ -866,8 +864,6 @@ Treppengeländer
 Wendeltreppe
 Holzdiele
 Parkett
-Kachel
-Tapete
 Badewanne
 Badeente
 Badeschaum
@@ -876,8 +872,6 @@ Seife
 Seifenschale
 Schwamm
 Handtuch
-Handtuchhalter
-Duschvorhang
 Wäscheleine
 Wäscheklammer
 Wäschekorb
@@ -914,6 +908,12 @@ Füller
 Tintenfass
 Notizbuch
 Federmappe
+Schaffell
+Sitzkissen
+Briefmarke
+Kompass
+Schneekugel
+Strohstern
 # Kleidung
 Pullover
 Strickjacke
@@ -962,13 +962,11 @@ Brotbeutel
 Zelt
 Strandkorb
 Fahrrad
-Fahrradklingel
 Fahrradkorb
 Bollerwagen
 Leiterwagen
 Pferdekutsche
 Dampflok
-Straßenbahn
 Seilbahn
 Gondel
 Heißluftballon
@@ -1013,3 +1011,5 @@ Marktplatz
 Dorfplatz
 Blumenstand
 Obststand
+Wanderweg
+Aussichtsturm
