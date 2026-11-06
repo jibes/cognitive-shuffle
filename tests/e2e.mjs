@@ -119,8 +119,8 @@ for (const [locale, title, heading] of [["de-DE", "Einschlafwörter", "So geht�
   check(await p.isVisible("#lang-list") && await p.getAttribute("#lang", "aria-expanded") === "true", "Umschalter: Liste öffnet");
   await p.click("#lang-list [data-lang=en]");
   check(!(await p.isVisible("#lang-list")) && await p.textContent("#lang-name") === "English", "Umschalter: Liste schließt, Knopf zeigt English");
-  check(JSON.stringify(await p.$$eval("#voices button", bs => bs.map(b => b.textContent))) === '["Rainbird","Verity","Nathaniel"]',
-    "Umschalter: englische Stimmen Rainbird, Verity, Nathaniel");
+  check(JSON.stringify(await p.$$eval("#voices button", bs => bs.map(b => b.textContent))) === '["Rainbird","Nathaniel"]',
+    "Umschalter: englische Stimmen Rainbird, Nathaniel");
   check(await p.textContent("#go") === "Start"
     && await p.textContent("#sounds [data-sound=rain]") === "Rain", "Umschalter: Texte auf Englisch");
   await p.reload();

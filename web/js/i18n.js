@@ -74,10 +74,10 @@ export const LANGS = Object.keys(TEXT);
 // (tools/build_clips.py --lang <sprache> --speaker <schlüssel>).
 export const VOICES = {
   de: [["laura", "Laura"], ["stefan", "Stefan"]],
-  en: [["rainbird", "Rainbird"], ["verity", "Verity"], ["nathaniel", "Nathaniel"]],
+  en: [["rainbird", "Rainbird"], ["nathaniel", "Nathaniel"]],  // Verity ausgemustert: tools/clips-retired/
 };
 // Frühere Wahl weiblich/männlich
-export const LEGACY_VOICE = { de: { f: "laura", m: "stefan" }, en: { f: "verity", m: "nathaniel" } };
+export const LEGACY_VOICE = { de: { f: "laura", m: "stefan" }, en: { f: "rainbird", m: "nathaniel" } };
 export const FALLBACK = "en";
 
 // Gespeicherte Wahl, sonst erste passende Browser-/Systemsprache, sonst Englisch.
