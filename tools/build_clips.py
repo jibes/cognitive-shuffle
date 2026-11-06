@@ -493,8 +493,8 @@ def main():
         # kurzer Pause). Nicht bei Wörtern mit festem Seed
         # (von Hand gewählt) und nicht bei Proben mit fremder Stimme oder Batches
         if a.batch == 1 and not a.voice and not (a.only and a.seed != ap.get_default("seed")):
-            def badness(x, sp):
-                return (truncated(x, sp), inner_pause(process(x, sp)))
+            def badness(x, sp):  # gemessen wie gehört: nach MP3 (verschiebt leise Stellen um die Schwelle)
+                return (truncated(x, sp), inner_pause(decode(encode_mp3(process(x, sp)))))
             bad = {w: badness(raw[w], spoken[w]) for w in words if w not in own}
             for s in RETAKE_SEEDS:
                 todo = [w for w, (t, p) in bad.items() if t or p > MAX_PAUSE_S]
