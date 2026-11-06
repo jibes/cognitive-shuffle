@@ -62,6 +62,13 @@ BITRATE = "48k"
 MAX_PAUSE_S = 0.20
 PAUSE_DB = -35.0  # still: 10-ms-Fenster leiser als Spitze − 35 dB
 RETAKE_SEEDS = (7, 8)
+# Abgebrochener Take: das Audio endet, bevor der letzte Buchstabe laut Zeitstempel zu Ende ist
+# (z. B. „Parkett“ ohne -tt). Gilt ebenfalls als Grund für weitere Takes.
+TRUNC_TOL_S = 0.02
+
+
+def truncated(x, spoken):
+    return bool(spoken) and len(x) / SR < spoken[1] - TRUNC_TOL_S
 # Neue Sprache: Eintrag hier, words/<code>.txt und Texte in web/js/i18n.js
 LANGS = {
     "de": {"voice": "de-DE-KatjaNeural", "tl": "de", "xml": "de-DE",
@@ -482,21 +489,25 @@ def main():
         seed = {None: a.seed, **own} if a.batch == 1 and not a.voice else a.seed
         raw, spoken = eleven_render(words, voice, a.eleven_model, a.lang, a.speed,
                                     a.stability, seed, a.batch, a.direction)
-        # Lange Pause im Wort: weitere Takes, kürzeste Pause gilt. Nicht bei Wörtern mit festem Seed
+        # Lange Pause im Wort oder abgebrochener Take: weitere Takes, der beste gilt (vollständig vor
+        # kurzer Pause). Nicht bei Wörtern mit festem Seed
         # (von Hand gewählt) und nicht bei Proben mit fremder Stimme oder Batches
         if a.batch == 1 and not a.voice and not (a.only and a.seed != ap.get_default("seed")):
-            pause = {w: inner_pause(process(raw[w], spoken[w])) for w in words if w not in own}
+            def badness(x, sp):
+                return (truncated(x, sp), inner_pause(process(x, sp)))
+            bad = {w: badness(raw[w], spoken[w]) for w in words if w not in own}
             for s in RETAKE_SEEDS:
-                todo = [w for w, p in pause.items() if p > MAX_PAUSE_S]
+                todo = [w for w, (t, p) in bad.items() if t or p > MAX_PAUSE_S]
                 if not todo:
                     break
-                print(f"{len(todo)} Wörter mit Pause über {MAX_PAUSE_S} s: Take mit Seed {s}", file=sys.stderr)
+                print(f"{len(todo)} Wörter abgebrochen oder mit Pause über {MAX_PAUSE_S} s: Take mit Seed {s}",
+                      file=sys.stderr)
                 r2, sp2 = eleven_render(todo, voice, a.eleven_model, a.lang, a.speed, a.stability,
                                         {None: s}, 1, a.direction)
                 for w in todo:
-                    p = inner_pause(process(r2[w], sp2[w]))
-                    if p < pause[w]:
-                        raw[w], spoken[w], pause[w] = r2[w], sp2[w], p
+                    b2 = badness(r2[w], sp2[w])
+                    if b2 < bad[w]:
+                        raw[w], spoken[w], bad[w] = r2[w], sp2[w], b2
                         if track:
                             own[w] = s
             if track:
@@ -505,6 +516,7 @@ def main():
     else:
         raw = azure_render(words, voice, a.rate, a.pitch, cfg["xml"])
 
+    cut = {w for w in words if isinstance(raw[w], np.ndarray) and truncated(raw[w], spoken.get(w))}
     clips, stats = {}, []
     if track:
         clips = dict(old)
@@ -526,6 +538,8 @@ def main():
         why = []
         if pause > MAX_PAUSE_S:
             why.append(f"Pause {pause:.2f} s")
+        if w in cut:
+            why.append("abgebrochen")
         if dur > 2 * med or dur > 3.0:
             why.append("lang")
         if dur < 0.4 * med:
